@@ -11,8 +11,9 @@
 #include <EEPROM.h>
 
 #include "config.h"
+#include "sectres.h"
 
-#define BOARD_ONLY 0
+#define BOARD_ONLY 1
 
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 Servo servo;
@@ -23,8 +24,6 @@ float lambda = 0.0;
 bool pumpStatus = true;
 int servoBalance = 0;
 
-char ssid[] = "";
-char pass[] = "";
 int wifiStatus = WL_IDLE_STATUS;
 WiFiUDP Udp; // A UDP instance to let us send and receive packets over UDP
 NTPClient timeClient(Udp);
@@ -72,9 +71,9 @@ void connectToWiFi() {
   // attempt to connect to WiFi network:
   while (wifiStatus != WL_CONNECTED) {
     Serial.print("Attempting to connect to SSID: ");
-    Serial.println(ssid);
+    Serial.println(SSID);
     // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
-    wifiStatus = WiFi.begin(ssid, pass);
+    wifiStatus = WiFi.begin(SSID, PASSWORD);
     // wait 10 seconds for connection:
     delay(10000);
 
@@ -109,6 +108,14 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
   display.display();
   delay(100);
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("LINE 1");
+  display.println("LINE 2");
+
+  display.setCursor(0,0);
+  display.display();
 #endif
 
   printOnDisplay("WiFi Con", "Prosze czekac");
@@ -292,10 +299,7 @@ void loop() {
     }
   }
 
-  String status = "Z: ";
-  status += String(config.targetOxygen);
-  status += " O: ";
-  status += String(oxygen);
+  
 
   float diff = config.targetOxygen - oxygen;
   int temp_angle = servo.read();
@@ -311,9 +315,9 @@ void loop() {
   } 
   float max_angle = abs(45 * (diff / 1.5));
 
-  if (time > lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
-    lastServoBalanceAdj = time;
-    serial.println("3 seconds passed!");
+  if (time.getUnixTime() > lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
+    lastServoBalanceAdj = time.getUnixTime();
+    Serial.println("3 seconds passed!");
 
     // if (diff > 0.0) {
     //   servoBalance += ceil(max(diff, 1.0));
@@ -339,7 +343,13 @@ void loop() {
      
   servo.write(temp_angle);
 
-  printOnDisplay(status.c_str(), WiFi.localIP().toString().c_str());
+  String status = "Z: ";
+  status += String(config.targetOxygen);
+
+  String status2 = "O: ";
+  status += String(oxygen);
+
+  printOnDisplay(status.c_str(), status2.c_str());
 
   delay(10);
 }

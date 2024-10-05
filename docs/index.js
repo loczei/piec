@@ -114,7 +114,7 @@ ipButton.addEventListener("click", () => {
         oxygen.update();
 
         servo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
-        servo.data.datasets[0].data.push(msg.balance);
+        servo.data.datasets[0].data.push(msg.balance + 85);
         servo.data.datasets[1].data.push(msg.servo);
 
         if (servo.data.datasets[1].data.length > history) {
