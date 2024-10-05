@@ -21,7 +21,7 @@ int displayStep = 0;
 float oxygen = 0.0;
 float lambda = 0.0;
 bool pumpStatus = true;
-int servo_bias = 0;
+int servoBalance = 0;
 
 char ssid[] = "";
 char pass[] = "";
@@ -39,6 +39,8 @@ struct Config {
 };
 
 Config config;
+
+long lastServoBalanceAdj = 0;
 
 void printOnDisplay(const char* line1, const char* line2) {
 #if BOARD_ONLY
@@ -152,6 +154,10 @@ void setup() {
   //Start main function.
   start();
 #endif
+
+  RTCTime temp;
+  RTC.getTime(temp);
+  lastServoBalanceAdj = temp.getUnixTime();
 }
 
 int rando() {
@@ -220,6 +226,9 @@ void sendData() {
   str += ", \"pump\": ";
   str += String(pumpStatus);
 
+  str += ", \"balance\": ";
+  str += String(servoBalance);
+
   str += " }";
 
   server.broadcastTXT(str);
@@ -247,6 +256,9 @@ void getData(uint8_t* payload) {
 
 //Infinite loop.
 void loop() {
+  RTCTime time;
+  RTC.getTime(time);
+
 #if BOARD_ONLY
   cj125Update();
 #else
@@ -290,30 +302,31 @@ void loop() {
 
   if (diff > 0.0 && temp_angle >= 35) {
     temp_angle=temp_angle-ceil(diff) * 2;
-  if ((diff)>=3)temp_angle=temp_angle-2;
+    if (diff >= 3) temp_angle=temp_angle-2;
   }
 
-  if (((diff)<0)  && temp_angle<=130 )
-  {
-  temp_angle=temp_angle-floor(diff) * 2;
-  if ((diff)<=-3)temp_angle=temp_angle+2;
+  if (((diff)<0)  && temp_angle<=130 ) {
+    temp_angle=temp_angle-floor(diff) * 2;
+    if (diff <= -3) temp_angle=temp_angle+2;
   } 
   float max_angle = abs(45 * (diff / 1.5));
 
-  /* if (ODCHYLENIE_STEP >= 20) {
-    if (TLEN_ROZNICA > 0.0) {
-      ODCHYLENIE += ceil(max(TLEN_ROZNICA, 1.0));
-    } else if (TLEN_ROZNICA < 0.0) {
-      ODCHYLENIE += floor(min(TLEN_ROZNICA, -1.0));
-    } 
-    ODCHYLENIE += ceil(max(TLEN_ROZNICA, 1.0));
-    if (ODCHYLENIE > 50) ODCHYLENIE = 50;
-    if (ODCHYLENIE < -50) ODCHYLENIE = -50;
+  if (time > lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
+    lastServoBalanceAdj = time;
+    serial.println("3 seconds passed!");
 
-    ODCHYLENIE_STEP = 0;
-  } else {
-    ODCHYLENIE_STEP++;
-  } */
+    // if (diff > 0.0) {
+    //   servoBalance += ceil(max(diff, 1.0));
+    // } else if (diff < 0.0) {
+    //   servoBalance += floor(min(diff, -1.0));
+    // }
+
+    // servoBalance += ceil(max(diff, 1.0));
+    
+    // if (servoBalance > 50) servoBalance = 50;
+    // if (servoBalance < -50) servoBalance = -50;
+  }
+  
 
   if (diff > 0.0) {
     temp_angle = max(85 - max_angle, temp_angle);

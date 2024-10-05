@@ -51,7 +51,7 @@ let servo = new Chart(servo_ctx, {
         },
         scales: {
             y: {
-                min: 0.0,
+                min: 40.0,
                 max: 180.0
             }
         }
@@ -114,9 +114,11 @@ ipButton.addEventListener("click", () => {
         oxygen.update();
 
         servo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
+        servo.data.datasets[0].data.push(msg.balance);
         servo.data.datasets[1].data.push(msg.servo);
 
         if (servo.data.datasets[1].data.length > history) {
+            servo.data.datasets[0].data = servo.data.datasets[0].data.slice(servo.data.datasets[0].data.length - history);
             servo.data.datasets[1].data = servo.data.datasets[1].data.slice(servo.data.datasets[1].data.length - history);
             servo.data.labels = servo.data.labels.slice(servo.data.labels.length - history);
         }
