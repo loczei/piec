@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8">
+    <title>Piec</title>
+    <link rel="stylesheet" href="index.css">
+    <script src=" https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js " ></script>
+    <script src="index.js" defer></script>
+  </head>
+  <body>
+    <nav>
+      <div class="tile">
+        <div class="up">
+          Adres płytki (2 linijka wyświetlacza, np. 192.168.1.102):
+        </div>
+        <div class="down"><input type="text" id="ip"><button id="ip-button">Połącz</button></div>
+      </div>
+      <div class="tile">
+        <div class="up">
+          Tlen zadany (liczba z 2-ma cyframi po przecinku, np. 14.20):
+        </div>
+        <div class="down"><input type="text" id="zadana"><button id="zadana-button">Ustaw</button></div>
+      </div>
+      <div class="tile">
+        <div class="up">
+          Odcięcie pomp (liczba z 2-ma cyframi po przecinku, np. 14.20):
+        </div>
+        <div class="down"><input type="text" id="odciecie"><button id="odciecie-button">Ustaw</button></div>
+      </div>
+    </nav>
+    <main>
+      <div><canvas id="tlen"></canvas></div>
+      <div><canvas id="serwo"></canvas></div>
+      <div class="options">
+        Historia (domyślnie 200): <input type="text" id="history"><button id="history-button">Ustaw</button> <br>
+        Cały zakres: <input type="checkbox" id="scale" checked>
+      </div>
+    </main>
+    
+  </body>
+</html>
