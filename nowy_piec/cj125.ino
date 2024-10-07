@@ -343,7 +343,6 @@ void cj125Init() {
   digitalWrite(LED_STATUS_POWER, LOW);
   digitalWrite(LED_STATUS_HEATER, LOW);
   analogWrite(HEATER_OUTPUT_PIN, 0); /* PWM is initially off. */
-  analogWrite(ANALOG_OUTPUT_PIN, 0); /* PWM is initially off. */
     
   //Start of operation. (Test LED's).
   Serial.print("Device reset.\n\r");

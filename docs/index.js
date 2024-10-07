@@ -52,7 +52,7 @@ let servo = new Chart(servo_ctx, {
         scales: {
             y: {
                 min: 40.0,
-                max: 180.0
+                max: 130.0
             }
         }
     }

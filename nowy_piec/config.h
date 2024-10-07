@@ -8,7 +8,7 @@
 #define           UR_ANALOG_INPUT_PIN                 1             /* Analog input for temperature.*/
 #define           UA_ANALOG_INPUT_PIN                 0             /* Analog input for lambda.*/
 #define           BUTTON_PIN                          8
-#define           PUMPS_SSR_PIN                       13
+#define           PUMPS_SSR_PIN                       9
 #define           SERVO_BALANCE_COOLDOWN              3
 
 //Define adjustable parameters.                        

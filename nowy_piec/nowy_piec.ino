@@ -11,7 +11,7 @@
 #include <EEPROM.h>
 
 #include "config.h"
-#include "sectres.h"
+#include "secrets.h"
 
 #define BOARD_ONLY 1
 
@@ -143,9 +143,7 @@ void setup() {
   }
 
   printOnDisplay("Test serwa", "Prosze czekac");
-#if BOARD_ONLY
   servo.attach(ANALOG_OUTPUT_PIN);  // attaches the servo on pin 9 to the servo object
-
 
   servo.write(40);   // OTWARTA
   delay(1000);
@@ -153,7 +151,6 @@ void setup() {
   delay(1000);
   servo.write(40);
   delay(1000);
-#endif
 
 #if BOARD_ONLY
   cj125Init();
@@ -263,6 +260,9 @@ void getData(uint8_t* payload) {
 
 //Infinite loop.
 void loop() {
+  if (!servo.attached()) {
+    servo.attach(ANALOG_OUTPUT_PIN);
+  }
   RTCTime time;
   RTC.getTime(time);
 
@@ -272,12 +272,15 @@ void loop() {
   oxygen += rando();
 #endif
 
+
   if (oxygen > config.oxygenPumpCutOut) {
     pumpStatus = false;
-    digitalWrite(BUTTON_PIN, LOW);
+    pinMode(PUMPS_SSR_PIN, OUTPUT);
+    digitalWrite(PUMPS_SSR_PIN, LOW);
   } else {
     pumpStatus = true;
-    digitalWrite(BUTTON_PIN, HIGH);
+    pinMode(PUMPS_SSR_PIN, OUTPUT);
+    digitalWrite(PUMPS_SSR_PIN, HIGH);
   }
 
   if (wifi) {
@@ -317,7 +320,7 @@ void loop() {
 
   if (time.getUnixTime() > lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
     lastServoBalanceAdj = time.getUnixTime();
-    Serial.println("3 seconds passed!");
+    // Serial.println("3 seconds passed!");
 
     // if (diff > 0.0) {
     //   servoBalance += ceil(max(diff, 1.0));
@@ -340,14 +343,15 @@ void loop() {
 
   if (temp_angle <40) temp_angle=40;
   if (temp_angle >130) temp_angle=130;
-     
+    
+  delay(100);
   servo.write(temp_angle);
 
   String status = "Z: ";
   status += String(config.targetOxygen);
 
   String status2 = "O: ";
-  status += String(oxygen);
+  status2 += String(oxygen);
 
   printOnDisplay(status.c_str(), status2.c_str());
 
