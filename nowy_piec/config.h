@@ -9,7 +9,9 @@
 #define           UA_ANALOG_INPUT_PIN                 0             /* Analog input for lambda.*/
 #define           BUTTON_PIN                          8
 #define           PUMPS_SSR_PIN                       9
-#define           SERVO_BALANCE_COOLDOWN              3
+#define           SERVO_BALANCE_COOLDOWN              3000
+#define           DISPLAY_COOLDOWN                    50
+#define           WEBSOCKET_COOLDOWN                  100
 
 //Define adjustable parameters.                        
 #define           UBAT_MIN                            150           /* Minimum voltage (ADC value) on Ubat to operate */

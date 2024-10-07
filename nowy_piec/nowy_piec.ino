@@ -17,7 +17,9 @@
 
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 Servo servo;
-int displayStep = 0;
+unsigned long displayTime = 0;
+unsigned long wsTime = 0;
+unsigned long lastServoBalanceAdj = 0;
 
 float oxygen = 0.0;
 float lambda = 0.0;
@@ -38,8 +40,6 @@ struct Config {
 };
 
 Config config;
-
-long lastServoBalanceAdj = 0;
 
 void printOnDisplay(const char* line1, const char* line2) {
 #if BOARD_ONLY
@@ -260,11 +260,14 @@ void getData(uint8_t* payload) {
 
 //Infinite loop.
 void loop() {
-  if (!servo.attached()) {
-    servo.attach(ANALOG_OUTPUT_PIN);
+  auto time = millis();
+
+  //detect time overflow
+  if (time < wsTime) {
+    wsTime = time;
+    displayTime = time;
+    lastServoBalanceAdj = time;
   }
-  RTCTime time;
-  RTC.getTime(time);
 
 #if BOARD_ONLY
   cj125Update();
@@ -283,10 +286,16 @@ void loop() {
     digitalWrite(PUMPS_SSR_PIN, HIGH);
   }
 
-  if (wifi) {
-    server.loop();
-    sendData();
+  if (WEBSOCKET_COOLDOWN + wsTime <= time) {
+    if (wifi) {
+      server.loop();
+      sendData();
+    }
+
+    wsTime = millis();
   }
+    
+  
 
   pinMode(BUTTON_PIN, OUTPUT);
   digitalWrite(BUTTON_PIN, HIGH);
@@ -318,8 +327,8 @@ void loop() {
   } 
   float max_angle = abs(45 * (diff / 1.5));
 
-  if (time.getUnixTime() > lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
-    lastServoBalanceAdj = time.getUnixTime();
+  if (time >= lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
+    lastServoBalanceAdj = millis();
     // Serial.println("3 seconds passed!");
 
     // if (diff > 0.0) {
@@ -344,16 +353,19 @@ void loop() {
   if (temp_angle <40) temp_angle=40;
   if (temp_angle >130) temp_angle=130;
     
-  delay(100);
   servo.write(temp_angle);
 
-  String status = "Z: ";
-  status += String(config.targetOxygen);
+  if (DISPLAY_COOLDOWN + displayTime <= time) {
+    String status = "Z: ";
+    status += String(config.targetOxygen);
 
-  String status2 = "O: ";
-  status2 += String(oxygen);
+    String status2 = "O: ";
+    status2 += String(oxygen);
 
-  printOnDisplay(status.c_str(), status2.c_str());
+    printOnDisplay(status.c_str(), status2.c_str());
 
+    displayTime = millis();
+  }
+  
   delay(10);
 }

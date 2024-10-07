@@ -58,6 +58,12 @@ let servo = new Chart(servo_ctx, {
     }
 });
 
+let temp_ip = localStorage.getItem("ip");
+
+if(temp_ip) {
+    document.querySelector("#ip").value = temp_ip;
+}
+
 document.querySelector("#scale").addEventListener("change", () => {
     if (document.querySelector("#scale").checked) {
         oxygen.options.scales.y.min = 0.0;
@@ -94,6 +100,8 @@ ipButton.addEventListener("click", () => {
         ipButton.textContent = "Połączono";
         ipButton.active = false;
         ipButton.style.backgroundColor = "green";
+
+        localStorage.setItem("ip", ip);
     });
 
     socket.addEventListener("message", (e) => {
@@ -139,11 +147,15 @@ ipButton.addEventListener("click", () => {
 });
 
 document.querySelector("#zadana-button").addEventListener("click", () => {
-    let str = `T ${document.querySelector("#zadana").value}`;
-    socket.send(str);
+    if (socket) {
+        let str = `T ${document.querySelector("#zadana").value}`;
+        socket.send(str);
+    }
 });
 
 document.querySelector("#odciecie-button").addEventListener("click", () => {
-    let str = `C ${document.querySelector("#odciecie").value}`;
-    socket.send(str);
+    if (socket) {
+        let str = `C ${document.querySelector("#zadana").value}`;
+        socket.send(str);
+    }
 });
