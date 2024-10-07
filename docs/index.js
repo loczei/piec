@@ -155,7 +155,7 @@ document.querySelector("#zadana-button").addEventListener("click", () => {
 
 document.querySelector("#odciecie-button").addEventListener("click", () => {
     if (socket) {
-        let str = `C ${document.querySelector("#zadana").value}`;
+        let str = `C ${document.querySelector("#odciecie").value}`;
         socket.send(str);
     }
 });
