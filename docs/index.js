@@ -159,3 +159,10 @@ document.querySelector("#odciecie-button").addEventListener("click", () => {
         socket.send(str);
     }
 });
+
+document.querySelector("#pompy-button").addEventListener("click", () => {
+    if (socket) {
+        let str = `R`;
+        socket.send(str);
+    }
+});

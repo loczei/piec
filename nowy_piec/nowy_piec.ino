@@ -255,6 +255,10 @@ void getData(uint8_t* payload) {
     Serial.print("New Oxygen pump cut out value: ");
     Serial.println(config.oxygenPumpCutOut);
     EEPROM.put(0, config);
+  } else if (str[0] == 'R') {
+    pumpStatus = true;
+    pinMode(PUMPS_SSR_PIN, OUTPUT);
+    digitalWrite(PUMPS_SSR_PIN, HIGH);
   }
 }
 
@@ -281,9 +285,9 @@ void loop() {
     pinMode(PUMPS_SSR_PIN, OUTPUT);
     digitalWrite(PUMPS_SSR_PIN, LOW);
   } else {
-    pumpStatus = true;
-    pinMode(PUMPS_SSR_PIN, OUTPUT);
-    digitalWrite(PUMPS_SSR_PIN, HIGH);
+    // pumpStatus = true;
+    // pinMode(PUMPS_SSR_PIN, OUTPUT);
+    // digitalWrite(PUMPS_SSR_PIN, HIGH);
   }
 
   if (WEBSOCKET_COOLDOWN + wsTime <= time) {
@@ -331,11 +335,12 @@ void loop() {
     lastServoBalanceAdj = time;
     // Serial.println("3 seconds passed!");
 
-    if (diff > 0.2) {
-      servoBalance -= 1;
-    } else if (diff < -0.2) {
-      servoBalance += 1;
-    }
+    if (diff > 0.2) servoBalance -= 1;
+    else if (diff < -0.2) servoBalance += 1;
+    else if (diff < -0.5) servoBalance += 2;
+    else if (diff > 0.5) servoBalance -= 2;
+    else if (diff < -1.0) servoBalance += 3;
+    else if (diff > 1.0) servoBalance -= 3;
 
     Serial.println(servoBalance);
 
