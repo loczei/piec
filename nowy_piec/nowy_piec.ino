@@ -158,10 +158,10 @@ void setup() {
   //Start main function.
   start();
 #endif
+  Serial.println("WERSJA 1");
 
-  RTCTime temp;
-  RTC.getTime(temp);
-  lastServoBalanceAdj = temp.getUnixTime();
+
+  lastServoBalanceAdj = 0;
 }
 
 int rando() {
@@ -292,7 +292,7 @@ void loop() {
       sendData();
     }
 
-    wsTime = millis();
+    wsTime = time;
   }
     
   
@@ -328,26 +328,28 @@ void loop() {
   float max_angle = abs(45 * (diff / 1.5));
 
   if (time >= lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
-    lastServoBalanceAdj = millis();
+    lastServoBalanceAdj = time;
     // Serial.println("3 seconds passed!");
 
-    // if (diff > 0.0) {
-    //   servoBalance += ceil(max(diff, 1.0));
-    // } else if (diff < 0.0) {
-    //   servoBalance += floor(min(diff, -1.0));
-    // }
+    if (diff > 0.2) {
+      servoBalance -= 1;
+    } else if (diff < -0.2) {
+      servoBalance += 1;
+    }
+
+    Serial.println(servoBalance);
 
     // servoBalance += ceil(max(diff, 1.0));
     
-    // if (servoBalance > 50) servoBalance = 50;
-    // if (servoBalance < -50) servoBalance = -50;
+    if (servoBalance > 50) servoBalance = 50;
+    if (servoBalance < -50) servoBalance = -50;
   }
   
 
   if (diff > 0.0) {
-    temp_angle = max(85 - max_angle, temp_angle);
+    temp_angle = max(85 + servoBalance - max_angle, temp_angle);
   } else {
-    temp_angle = min(85 + max_angle, temp_angle);
+    temp_angle = min(85 + servoBalance + max_angle, temp_angle);
   }
 
   if (temp_angle <40) temp_angle=40;
@@ -364,7 +366,7 @@ void loop() {
 
     printOnDisplay(status.c_str(), status2.c_str());
 
-    displayTime = millis();
+    displayTime = time;
   }
   
   delay(10);
