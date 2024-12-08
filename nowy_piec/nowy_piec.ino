@@ -17,9 +17,11 @@
 
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 Servo servo;
+Servo topServo;
 unsigned long displayTime = 0;
 unsigned long wsTime = 0;
 unsigned long lastServoBalanceAdj = 0;
+int topServoStatus = true;
 
 float oxygen = 0.0;
 float lambda = 0.0;
@@ -37,12 +39,14 @@ bool wifi = false;
 struct Config {
   float targetOxygen;
   float oxygenPumpCutOut;
+  float oxygenTopServoCutOut;
 };
 
 Config config;
 
 void printOnDisplay(const char* line1, const char* line2) {
 #if BOARD_ONLY
+  delay(16);
   display.clearDisplay();
   display.setCursor(0,0);
   display.println(line1);
@@ -144,12 +148,16 @@ void setup() {
 
   printOnDisplay("Test serwa", "Prosze czekac");
   servo.attach(ANALOG_OUTPUT_PIN);  // attaches the servo on pin 9 to the servo object
+  topServo.attach(TOP_SERVO);
 
-  servo.write(40);   // OTWARTA
+  servo.write(40);// OTWARTA
+  topServo.write(130);   
   delay(1000);
   servo.write(130);  // ZAMKNIĘTA
+  topServo.write(40);
   delay(1000);
   servo.write(40);
+  topServo.write(130);
   delay(1000);
 
 #if BOARD_ONLY
@@ -202,6 +210,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
     case WStype_FRAGMENT_BIN_START:
     case WStype_FRAGMENT:
     case WStype_FRAGMENT_FIN:
+      Serial.print("WebSocket Error");
         break;
   }
 }
@@ -233,6 +242,12 @@ void sendData() {
   str += ", \"balance\": ";
   str += String(servoBalance);
 
+  str += ", \"topServo\": ";
+  str += String(topServo.read());
+
+  str += ", \"topServoStatus\": ";
+  str += String(topServoStatus);
+
   str += " }";
 
   server.broadcastTXT(str);
@@ -259,6 +274,16 @@ void getData(uint8_t* payload) {
     pumpStatus = true;
     pinMode(PUMPS_SSR_PIN, OUTPUT);
     digitalWrite(PUMPS_SSR_PIN, HIGH);
+  } else if (str[0] == 'S') {
+    topServoStatus = true;
+    topServo.write(130);
+  } else if (str[0] == 'O') {
+    float temp = str.substring(2, str.length()).toFloat();
+    if (temp < 0.05) return;
+    config.oxygenTopServoCutOut = temp;
+    Serial.print("New top servo cut out value: ");
+    Serial.println(config.oxygenTopServoCutOut);
+    EEPROM.put(0, config);
   }
 }
 
@@ -294,6 +319,10 @@ void loop() {
     if (wifi) {
       server.loop();
       sendData();
+
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected");
+      }
     }
 
     wsTime = time;
@@ -331,16 +360,30 @@ void loop() {
   } 
   float max_angle = abs(45 * (diff / 1.5));
 
+  int topServoChange = 0;
+
   if (time >= lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
     lastServoBalanceAdj = time;
     // Serial.println("3 seconds passed!");
 
-    if (diff > 0.2) servoBalance -= 1;
-    else if (diff < -0.2) servoBalance += 1;
-    else if (diff < -0.5) servoBalance += 2;
-    else if (diff > 0.5) servoBalance -= 2;
-    else if (diff < -1.0) servoBalance += 3;
-    else if (diff > 1.0) servoBalance -= 3;
+    topServoChange = 1;
+
+    if (diff > 0.2) { 
+      servoBalance -= 1;
+      topServoChange -=6;
+    } else if (diff < -0.2) {
+      servoBalance += 1;
+    } if (diff < -0.5) {
+      servoBalance += 1;
+    } else if (diff > 0.5) {
+      servoBalance -= 1;
+      topServoChange -= 5;
+    } if (diff < -1.0) {
+      servoBalance += 1;
+    } else if (diff > 1.0) { 
+      servoBalance -= 1;
+      topServoChange -= 10;
+    }
 
     Serial.println(servoBalance);
 
@@ -350,6 +393,7 @@ void loop() {
     if (servoBalance < -50) servoBalance = -50;
   }
   
+  if (abs(diff) > 0.25) max_angle *= 0.75 + min(abs(diff), 1.75);
 
   if (diff > 0.0) {
     temp_angle = max(85 + servoBalance - max_angle, temp_angle);
@@ -357,10 +401,31 @@ void loop() {
     temp_angle = min(85 + servoBalance + max_angle, temp_angle);
   }
 
+  if (oxygen < 0.05) temp_angle=40;
+
   if (temp_angle <40) temp_angle=40;
   if (temp_angle >130) temp_angle=130;
     
   servo.write(temp_angle);
+
+  if (oxygen > config.oxygenTopServoCutOut) {
+    topServoStatus = false;
+    topServo.write(40);
+  }
+
+  if (topServoStatus && topServoChange != 0) {
+    int topServoAngle = topServo.read();
+    if (topServoChange == 1) {
+      topServoChange += 19;
+    }
+
+    topServoAngle = topServoAngle + topServoChange;
+    if (topServoAngle < 40) topServoAngle = 40;
+    if (topServoAngle > 130) topServoAngle = 130;
+
+    topServo.write(topServoAngle);
+  }
+  
 
   if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";

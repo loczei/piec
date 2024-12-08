@@ -58,6 +58,31 @@ let servo = new Chart(servo_ctx, {
     }
 });
 
+const topServo_ctx = document.getElementById('serwo-gorne');
+
+let topServo = new Chart(topServo_ctx, {
+    type: 'line',
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Wychylenie serwa',
+            data: [],
+            fill: false,
+        }]
+    },
+    options: {
+        animation: {
+            duration: 0,
+        },
+        scales: {
+            y: {
+                min: 40.0,
+                max: 130.0
+            }
+        }
+    }
+});
+
 let temp_ip = localStorage.getItem("ip");
 
 if(temp_ip) {
@@ -70,13 +95,18 @@ document.querySelector("#scale").addEventListener("change", () => {
         oxygen.options.scales.y.max = 25.0;
 
         servo.options.scales.y.min = 40.0;
-        servo.options.scales.y.max = 180.0;
+        servo.options.scales.y.max = 130.0;
+        topServo.options.scales.y.min = 40.0;
+        topServo.options.scales.y.max = 130.0;
     } else {
         oxygen.options.scales.y.min = null;
         oxygen.options.scales.y.max = null;
 
         servo.options.scales.y.min = null;
         servo.options.scales.y.max = null;
+
+        topServo.options.scales.y.min = null;
+        topServo.options.scales.y.max = null;
     }
 });
 
@@ -132,6 +162,16 @@ ipButton.addEventListener("click", () => {
         }
 
         servo.update();
+
+        topServo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
+        topServo.data.datasets[0].data.push(msg.topServo);
+
+        if (topServo.data.datasets[0].data.length > history) {
+            topServo.data.datasets[0].data = topServo.data.datasets[0].data.slice(topServo.data.datasets[0].data.length - history);
+            topServo.data.labels = servo.data.labels.slice(topServo.data.labels.length - history);
+        }
+
+        topServo.update();
     });
 
     socket.addEventListener("close", () => {
@@ -160,9 +200,23 @@ document.querySelector("#odciecie-button").addEventListener("click", () => {
     }
 });
 
+document.querySelector("#odciecie-servo-button").addEventListener("click", () => {
+    if (socket) {
+        let str = `O ${document.querySelector("#odciecie-servo").value}`;
+        socket.send(str);
+    }
+});
+
 document.querySelector("#pompy-button").addEventListener("click", () => {
     if (socket) {
         let str = `R`;
+        socket.send(str);
+    }
+});
+
+document.querySelector("#serwo-button").addEventListener("click", () => {
+    if (socket) {
+        let str = `S`;
         socket.send(str);
     }
 });

@@ -3,10 +3,12 @@
 struct Config {
   float targetOxygen;
   float oxygenPumpCutOut;
+  float oxygenTopServoCutOut;
 };
 
 Config config = {
   7.0,
+  10.0,
   10.0
 };
 

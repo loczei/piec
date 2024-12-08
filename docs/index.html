@@ -29,14 +29,29 @@
       </div>
       <div class="tile">
         <div class="up">
+          Odcięcie górnego serwa (liczba z 2-ma cyframi po przecinku, np. 14.20):
+        </div>
+        <div class="down"><input type="text" id="odciecie-servo"><button id="odciecie-servo-button">Ustaw</button></div>
+      </div>
+      <div class="tile">
+        <div class="up">
           Zrestartuj wyłącznik pomp
         </div>
         <button id="pompy-button" style="width: 100%">Restart</button>
+      </div>
+      <div class="tile">
+        <div class="up">
+          Zrestartuj odcięcie górnego serwa
+        </div>
+        <button id="serwo-button" style="width: 100%">Restart</button>
       </div>
     </nav>
     <main>
       <div><canvas id="tlen"></canvas></div>
       <div><canvas id="serwo"></canvas></div>
+      <div><canvas id="serwo-gorne"></canvas></div>
+      <div></div>
+      <br>
       <div class="options">
         Historia (domyślnie 200): <input type="text" id="history"><button id="history-button">Ustaw</button> <br>
         Cały zakres: <input type="checkbox" id="scale" checked>
