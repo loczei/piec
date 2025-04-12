@@ -13,8 +13,6 @@
 #include "config.h"
 #include "secrets.h"
 
-#define BOARD_ONLY 1
-
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 Servo servo;
 Servo topServo;
@@ -22,6 +20,7 @@ unsigned long displayTime = 0;
 unsigned long wsTime = 0;
 unsigned long lastServoBalanceAdj = 0;
 int topServoStatus = true;
+int balanceCentre = 85;
 
 float oxygen = 0.0;
 float lambda = 0.0;
@@ -43,13 +42,17 @@ struct Config {
   float targetOxygen;
   float oxygenPumpCutOut;
   float oxygenTopServoCutOut;
+  int maxServoAngle;
+  int minServoAngle;
+  float multiReal;
+  float boostReal;
+  float multiMax;
+  int servoBalanceCooldown;
 };
 
 Config config;
 
 void printOnDisplay(const char* line1, const char* line2) {
-#if BOARD_ONLY
-  delay(16);
   display.clearDisplay();
   display.setCursor(0, 0);
   display.println(line1);
@@ -57,12 +60,6 @@ void printOnDisplay(const char* line1, const char* line2) {
 
   display.setCursor(0, 0);
   display.display();
-#else
-  Serial.println("---------------- Screen ----------------");
-  Serial.println(line1);
-  Serial.println(line2);
-  Serial.println("---------------- sCREEN ----------------");
-#endif
 }
 
 
@@ -110,8 +107,8 @@ void setup() {
 
   pinMode(PUMPS_SSR_PIN, OUTPUT);
   EEPROM.get(0, config);
+  balanceCentre = config.minServoAngle + ((config.maxServoAngle - config.minServoAngle) / 2);
 
-#if BOARD_ONLY
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // Address 0x3C for 128x32
   display.display();
   delay(100);
@@ -123,7 +120,6 @@ void setup() {
 
   display.setCursor(0, 0);
   display.display();
-#endif
 
   printOnDisplay("WiFi Con", "Prosze czekac");
   connectToWiFi();
@@ -163,31 +159,12 @@ void setup() {
   topServo.write(130);
   delay(1000);
 
-  //   pwm.begin();
-  //   pwm.setOscillatorFrequency(27000000);
-  // pwm.setPWMFreq(50);
-
-  // delay(200);
-  // pwm.setPWM(firstServo, 0, SERVOMIN + 100);
-  // pwm.setPWM(secondServo, 0, SERVOMIN + 100);
-
-  // delay(200);
-  // pwm.setPWM(firstServo, 0, SERVOMIN + 200);
-  // pwm.setPWM(secondServo, 0, SERVOMIN + 200);
-
-#if BOARD_ONLY
   cj125Init();
-
-  //Start main function.
   start();
-#endif
+
   Serial.println("WERSJA 1");
 
   lastServoBalanceAdj = 0;
-}
-
-int rando() {
-  return random(-1, 1);
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
@@ -241,11 +218,7 @@ void sendData() {
   str += time.toString();
 
   str += "\", \"oxygen\": ";
-#if BOARD_ONLY
   str += String(oxygen);
-#else
-  str += String(random(15, 20));
-#endif
 
   str += ", \"target\": ";
   str += String(config.targetOxygen);
@@ -315,21 +288,12 @@ void loop() {
     lastServoBalanceAdj = time;
   }
 
-#if BOARD_ONLY
   cj125Update();
-#else
-  oxygen += rando();
-#endif
-
 
   if (oxygen > config.oxygenPumpCutOut) {
     pumpStatus = false;
     pinMode(PUMPS_SSR_PIN, OUTPUT);
-    digitalWrite(PUMPS_SSR_PIN, LOW);
-  } else {
-    // pumpStatus = true;
-    // pinMode(PUMPS_SSR_PIN, OUTPUT);
-    // digitalWrite(PUMPS_SSR_PIN, HIGH);
+    digitalWrite(PUMPS_SSR_PIN, LOW); 
   }
 
   if (WEBSOCKET_COOLDOWN + wsTime <= time) {
@@ -362,127 +326,77 @@ void loop() {
   float diff = config.targetOxygen - oxygen;
   int temp_angle = servo.read();
 
-  // int topServoChange = 0;
+  //
+  // First step:
+  // Adjust servo angle in real time
+  //
 
-  // if (time >= lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
-  //   lastServoBalanceAdj = time;
-  //   // Serial.println("3 seconds passed!");
-
-  //   topServoChange = -1;
-
-  //   if (diff > 0.2) {
-  //     temp_angle += 1;
-  //   } else if (diff < -0.2) {
-  //     temp_angle -= 1;
-  //   }
-  //   if (diff < -0.5) {
-  //     temp_angle -= 1;
-  //   } else if (diff > 0.5) {
-  //     temp_angle += 1;
-  //   }
-  //   if (diff < -1.0) {
-  //     temp_angle -= 1;
-  //   } else if (diff > 1.0) {
-  //     temp_angle += 1;
-  //     topServoChange += 2;
-  //   }
-  // }
-
-    //if (oxygen < 0.05) temp_angle=40;
-
-    // if (temp_angle < 85) temp_angle = 85;
-    // if (temp_angle > 130) temp_angle = 130;
-
-    // servo.write(temp_angle);
-
-    if (diff > 0.0 && temp_angle >= 35) {
-      temp_angle=temp_angle-ceil(diff) * 2;
-      if (diff >= 3) temp_angle=temp_angle-2;
-    }
-
-    if (((diff)<0)  && temp_angle<=130 ) {
-      temp_angle=temp_angle-floor(diff) * 2;
-      if (diff <= -3) temp_angle=temp_angle+2;
-    }
-    float max_angle = abs(45 * (diff / 1.5));
-
-    int topServoChange = 0;
-
-    if (time >= lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
-      lastServoBalanceAdj = time;
-      // Serial.println("3 seconds passed!");
-
-      topServoChange = 1;
-
-      if (diff > 0.2) {
-        servoBalance -= 1;
-        topServoChange -= 1;
-      } else if (diff < -0.2) {
-        servoBalance += 1;
-      } if (diff < -0.5) {
-        servoBalance += 1;
-      } else if (diff > 0.5) {
-        servoBalance -= 1;
-        topServoChange -= 1;
-      } if (diff < -1.0) {
-        servoBalance += 1;
-      } else if (diff > 1.0) {
-        servoBalance -= 1;
-        topServoChange -= 2;
-      }
-
-      Serial.println(servoBalance);
-
-      // servoBalance += ceil(max(diff, 1.0));
-
-      if (servoBalance > 50) servoBalance = 50;
-      if (servoBalance < -50) servoBalance = -50;
-    }
-
-    if (abs(diff) > 0.25) max_angle *= 0.75 + min(abs(diff), 1.75);
-
-    if (diff > 0.0) {
-      temp_angle = max(85 + servoBalance - max_angle, temp_angle);
-    } else {
-      temp_angle = min(85 + servoBalance + max_angle, temp_angle);
-    }
-
-    //if (oxygen < 0.05) temp_angle=40;
-
-    if (temp_angle <40) temp_angle=40;
-    if (temp_angle >130) temp_angle=130;
-
-    servo.write(temp_angle);
-
-    if (oxygen > config.oxygenTopServoCutOut) {
-      topServoStatus = false;
-      topServo.write(40);
-    }
-
-    if (topServoStatus && topServoChange != 0) {
-      int topServoAngle = topServo.read();
-      if (topServoChange == 1) {
-        topServoChange += 3;
-      }
-
-      topServoAngle = topServoAngle + topServoChange;
-      if (topServoAngle < 40) topServoAngle = 40;
-      if (topServoAngle > 130) topServoAngle = 130;
-
-      topServo.write(topServoAngle);
-    }
-
-    if (DISPLAY_COOLDOWN + displayTime <= time) {
-      String status = "Z: ";
-      status += String(config.targetOxygen);
-
-      String status2 = "O: ";
-      status2 += String(oxygen);
-
-      printOnDisplay(status.c_str(), status2.c_str());
-
-      displayTime = time;
-    }
-
-    delay(10);
+  if (diff > 0.0 && temp_angle >= config.minServoAngle) {
+    temp_angle = temp_angle - ceil(diff) * config.multiReal;
+    if (diff >= 3) temp_angle = temp_angle - config.boostReal;
+  } else if (diff < 0.0 && temp_angle <= config.maxServoAngle) {
+    temp_angle = temp_angle - floor(diff) * config.multiReal;
+    if (diff <= -3) temp_angle = temp_angle + config.boostReal;
   }
+
+  float max_angle = abs(config.multiMax * diff);
+
+  if (time >= lastServoBalanceAdj + config.servoBalanceCooldown) {
+    lastServoBalanceAdj = time;
+
+    if (diff > 0.2) {
+      servoBalance -= 1;
+    } else if (diff < -0.2) {
+      servoBalance += 1;
+    } if (diff < -0.5) {
+      servoBalance += 1;
+    } else if (diff > 0.5) {
+      servoBalance -= 1;
+    } if (diff < -1.0) {
+      servoBalance += 1;
+    } else if (diff > 1.0) {
+      servoBalance -= 1;
+    }
+
+    if (servoBalance > 50) servoBalance = 50;
+    if (servoBalance < -50) servoBalance = -50;
+  }
+
+  if (abs(diff) > 0.25) max_angle *= 0.75 + min(abs(diff), 1.75);
+
+  if (diff > 0.0) {
+    temp_angle = max(balanceCentre + servoBalance - max_angle, temp_angle);
+  } else { 
+    temp_angle = min(balanceCentre + servoBalance + max_angle, temp_angle);
+  }
+
+  //if (oxygen < 0.05) temp_angle=40;
+
+  if (temp_angle < config.minServoAngle) temp_angle = config.minServoAngle;
+  if (temp_angle > config.maxServoAngle) temp_angle = config.maxServoAngle;
+
+  servo.write(temp_angle);
+
+  if (oxygen > config.oxygenTopServoCutOut) {
+    topServoStatus = false;
+    topServo.write(40);
+  }
+
+  if (topServoStatus && topServoChange != 0) {
+    int topServoAngle = topServo.read();
+    if (topServoChange == 1) {
+      topServoChange += 3;
+    }history-button
+    String status = "Z: ";
+    status += String(config.targetOxygen);
+
+    String status2 = "O: ";
+    status2 += String(oxygen);
+
+    printOnDisplay(status.c_str(), status2.c_str());
+
+    displayTime = time;
+  }
+
+  delay(10);
+}
