@@ -22,7 +22,7 @@ let oxygen = new Chart(oxygen_ctx, {
         scales: {
             y: {
                 min: 0.0,
-                max: 25.0
+                max: 23.0
             }
         }
     }
@@ -49,12 +49,6 @@ let servo = new Chart(servo_ctx, {
         animation: {
             duration: 0,
         },
-        scales: {
-            y: {
-                min: 40.0,
-                max: 130.0
-            }
-        }
     }
 });
 
@@ -74,12 +68,6 @@ let topServo = new Chart(topServo_ctx, {
         animation: {
             duration: 0,
         },
-        scales: {
-            y: {
-                min: 40.0,
-                max: 130.0
-            }
-        }
     }
 });
 
@@ -92,21 +80,10 @@ if(temp_ip) {
 document.querySelector("#scale").addEventListener("change", () => {
     if (document.querySelector("#scale").checked) {
         oxygen.options.scales.y.min = 0.0;
-        oxygen.options.scales.y.max = 25.0;
-
-        servo.options.scales.y.min = 40.0;
-        servo.options.scales.y.max = 130.0;
-        topServo.options.scales.y.min = 40.0;
-        topServo.options.scales.y.max = 130.0;
+        oxygen.options.scales.y.max = 23.0;
     } else {
         oxygen.options.scales.y.min = null;
         oxygen.options.scales.y.max = null;
-
-        servo.options.scales.y.min = null;
-        servo.options.scales.y.max = null;
-
-        topServo.options.scales.y.min = null;
-        topServo.options.scales.y.max = null;
     }
 });
 
@@ -119,6 +96,14 @@ document.querySelector("#history-button").addEventListener("click", () => {
 let socket;
 
 const ipButton = document.querySelector('#ip-button');
+
+function deleteHistory(target) {
+    if (target.data.datasets[0].data.length > history) {
+        target.data.datasets[0].data = target.data.datasets[0].data.slice(target.data.datasets[0].data.length - history);
+        target.data.datasets[1].data = target.data.datasets[1].data.slice(target.data.datasets[1].data.length - history);
+        target.data.labels = target.data.labels.slice(target.data.labels.length - history);
+    }
+}
 
 ipButton.addEventListener("click", () => {
     console.log("Connecting");
@@ -138,16 +123,11 @@ ipButton.addEventListener("click", () => {
         console.log(e.data);
         let msg = JSON.parse(e.data);
         
-
         oxygen.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
         oxygen.data.datasets[0].data.push(msg.oxygen);
         oxygen.data.datasets[1].data.push(msg.target);
 
-        if (oxygen.data.datasets[0].data.length > history) {
-            oxygen.data.datasets[0].data = oxygen.data.datasets[0].data.slice(oxygen.data.datasets[0].data.length - history);
-            oxygen.data.datasets[1].data = oxygen.data.datasets[1].data.slice(oxygen.data.datasets[1].data.length - history);
-            oxygen.data.labels = oxygen.data.labels.slice(oxygen.data.labels.length - history);
-        }
+        deleteHistory(oxygen);
 
         oxygen.update();
 
@@ -155,21 +135,14 @@ ipButton.addEventListener("click", () => {
         servo.data.datasets[0].data.push(msg.balance + 85);
         servo.data.datasets[1].data.push(msg.servo);
 
-        if (servo.data.datasets[1].data.length > history) {
-            servo.data.datasets[0].data = servo.data.datasets[0].data.slice(servo.data.datasets[0].data.length - history);
-            servo.data.datasets[1].data = servo.data.datasets[1].data.slice(servo.data.datasets[1].data.length - history);
-            servo.data.labels = servo.data.labels.slice(servo.data.labels.length - history);
-        }
+        deleteHistory(servo);
 
         servo.update();
 
         topServo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
         topServo.data.datasets[0].data.push(msg.topServo);
 
-        if (topServo.data.datasets[0].data.length > history) {
-            topServo.data.datasets[0].data = topServo.data.datasets[0].data.slice(topServo.data.datasets[0].data.length - history);
-            topServo.data.labels = servo.data.labels.slice(topServo.data.labels.length - history);
-        }
+        deleteHistory(topServo);
 
         topServo.update();
     });
@@ -186,37 +159,31 @@ ipButton.addEventListener("click", () => {
     });
 });
 
-document.querySelector("#zadana-button").addEventListener("click", () => {
-    if (socket) {
-        let str = `T ${document.querySelector("#zadana").value}`;
-        socket.send(str);
-    }
-});
+function button(name, char, payload) {
+    document.querySelector(`#${name}-button`).addEventListener("click", () => {
+        if (socket) {
+            let str;
+            if (payload) {
+                str = `${char} ${document.querySelector(`#${name}`).value}`;
+            } else {
+                str = `${char}`;
+            }
+            
+            socket.send(str);
+        }
+    });
+}
 
-document.querySelector("#odciecie-button").addEventListener("click", () => {
-    if (socket) {
-        let str = `C ${document.querySelector("#odciecie").value}`;
-        socket.send(str);
-    }
-});
-
-document.querySelector("#odciecie-servo-button").addEventListener("click", () => {
-    if (socket) {
-        let str = `O ${document.querySelector("#odciecie-servo").value}`;
-        socket.send(str);
-    }
-});
-
-document.querySelector("#pompy-button").addEventListener("click", () => {
-    if (socket) {
-        let str = `R`;
-        socket.send(str);
-    }
-});
-
-document.querySelector("#serwo-button").addEventListener("click", () => {
-    if (socket) {
-        let str = `S`;
-        socket.send(str);
-    }
-});
+button("zadana", "T", true);
+button("odciecie", "C", true);
+button("odciecie-servo", "O", true);
+button("pompy", "R", false);
+button("serwo", "S", false);
+button("min-angle", "I", true);
+button("max-angle", "A", true);
+button("multi-real", "U", true);
+button("boost-real", "E", true);
+button("multi-max", "M", true);
+button("servo-balance-cooldown", "V", true);
+button("balance-multi", "L", true);
+button("max-balance", "X", true);

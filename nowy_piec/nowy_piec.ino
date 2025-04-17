@@ -36,18 +36,23 @@ NTPClient timeClient(Udp);
 
 WebSocketsServer server(80);
 
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x7F, Wire);
+
+
 bool wifi = false;
 
 struct Config {
   float targetOxygen;
   float oxygenPumpCutOut;
   float oxygenTopServoCutOut;
-  int maxServoAngle;
-  int minServoAngle;
+  int maxServo;
+  int minServo;
   float multiReal;
   float boostReal;
   float multiMax;
   int servoBalanceCooldown;
+  int balanceMulti;
+  int maxBalance;
 };
 
 Config config;
@@ -107,7 +112,7 @@ void setup() {
 
   pinMode(PUMPS_SSR_PIN, OUTPUT);
   EEPROM.get(0, config);
-  balanceCentre = config.minServoAngle + ((config.maxServoAngle - config.minServoAngle) / 2);
+  balanceCentre = config.minServo + ((config.maxServo - config.minServo) / 2);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // Address 0x3C for 128x32
   display.display();
@@ -149,15 +154,8 @@ void setup() {
   servo.attach(ANALOG_OUTPUT_PIN);  // attaches the servo on pin 9 to the servo object
   topServo.attach(TOP_SERVO);
 
-  servo.write(85);  // OTWARTA
-  topServo.write(130);
-  delay(1000);
-  servo.write(130);  // ZAMKNIĘTA
-  topServo.write(85);
-  delay(1000);
-  servo.write(85);
-  topServo.write(130);
-  delay(1000);
+  pwm.begin();
+  pwm.setPWMFreq(50);
 
   cj125Init();
   start();
@@ -274,6 +272,62 @@ void getData(uint8_t* payload) {
     Serial.print("New top servo cut out value: ");
     Serial.println(config.oxygenTopServoCutOut);
     EEPROM.put(0, config);
+  } else if (str[0] == 'I') {
+    int temp = str.substring(2, str.length()).toInt();
+    if (temp < 0) return;
+    config.minServo = temp;
+    Serial.print("New min servo value: ");
+    Serial.println(config.minServo);
+    EEPROM.put(0, config);
+  } else if (str[0] == 'A') {
+    int temp = str.substring(2, str.length()).toInt();
+    if (temp < 0) return;
+    config.maxServo = temp;
+    Serial.print("New max servo value: ");
+    Serial.println(config.maxServo);
+    EEPROM.put(0, config);
+  } else if (str[0] == 'U') {
+    float temp = str.substring(2, str.length()).toFloat();
+    if (temp < 0.05) return;
+    config.multiReal = temp;
+    Serial.print("New multiplier real value: ");
+    Serial.println(config.multiReal);
+    EEPROM.put(0, config);
+  } else if (str[0] == 'E') {
+    float temp = str.substring(2, str.length()).toFloat();
+    if (temp < 0.05) return;
+    config.boostReal = temp;
+    Serial.print("New boost real value: ");
+    Serial.println(config.boostReal);
+    EEPROM.put(0, config);
+  } else if (str[0] == 'M') {
+    float temp = str.substring(2, str.length()).toFloat();
+    if (temp < 0.05) return;
+    config.multiMax = temp;
+    Serial.print("New multiplier maximum value: ");
+    Serial.println(config.multiMax);
+    EEPROM.put(0, config);
+  } else if (str[0] == 'V') {
+    int temp = str.substring(2, str.length()).toInt();
+    if (temp < 0) return;
+    config.servoBalanceCooldown = temp;
+    Serial.print("New servo balance cooldown value: ");
+    Serial.println(config.servoBalanceCooldown);
+    EEPROM.put(0, config);
+  } else if (str[0] == 'L') {
+    int temp = str.substring(2, str.length()).toInt();
+    if (temp < 0) return;
+    config.balanceMulti = temp;
+    Serial.print("New balance multiplier value: ");
+    Serial.println(config.balanceMulti);
+    EEPROM.put(0, config);
+  } else if (str[0] == 'X') {
+    int temp = str.substring(2, str.length()).toInt();
+    if (temp < 0) return;
+    config.maxBalance = temp;
+    Serial.print("New max balance value: ");
+    Serial.println(config.maxBalance);
+    EEPROM.put(0, config);
   }
 }
 
@@ -331,10 +385,10 @@ void loop() {
   // Adjust servo angle in real time
   //
 
-  if (diff > 0.0 && temp_angle >= config.minServoAngle) {
+  if (diff > 0.0 && temp_angle >= config.minServo) {
     temp_angle = temp_angle - ceil(diff) * config.multiReal;
     if (diff >= 3) temp_angle = temp_angle - config.boostReal;
-  } else if (diff < 0.0 && temp_angle <= config.maxServoAngle) {
+  } else if (diff < 0.0 && temp_angle <= config.maxServo) {
     temp_angle = temp_angle - floor(diff) * config.multiReal;
     if (diff <= -3) temp_angle = temp_angle + config.boostReal;
   }
@@ -345,21 +399,21 @@ void loop() {
     lastServoBalanceAdj = time;
 
     if (diff > 0.2) {
-      servoBalance -= 1;
+      servoBalance -= config.balanceMulti;
     } else if (diff < -0.2) {
-      servoBalance += 1;
+      servoBalance += config.balanceMulti;
     } if (diff < -0.5) {
-      servoBalance += 1;
+      servoBalance += config.balanceMulti;
     } else if (diff > 0.5) {
-      servoBalance -= 1;
+      servoBalance -= config.balanceMulti;
     } if (diff < -1.0) {
-      servoBalance += 1;
+      servoBalance += config.balanceMulti;
     } else if (diff > 1.0) {
-      servoBalance -= 1;
+      servoBalance -= config.balanceMulti;
     }
 
-    if (servoBalance > 50) servoBalance = 50;
-    if (servoBalance < -50) servoBalance = -50;
+    if (servoBalance > config.maxBalance) servoBalance = config.maxBalance;
+    if (servoBalance < -config.maxBalance) servoBalance = -config.maxBalance;
   }
 
   if (abs(diff) > 0.25) max_angle *= 0.75 + min(abs(diff), 1.75);
@@ -372,21 +426,12 @@ void loop() {
 
   //if (oxygen < 0.05) temp_angle=40;
 
-  if (temp_angle < config.minServoAngle) temp_angle = config.minServoAngle;
-  if (temp_angle > config.maxServoAngle) temp_angle = config.maxServoAngle;
+  if (temp_angle < config.minServo) temp_angle = config.minServo;
+  if (temp_angle > config.maxServo) temp_angle = config.maxServo;
 
-  servo.write(temp_angle);
+  pwm.setPWM(temp_angle);
 
-  if (oxygen > config.oxygenTopServoCutOut) {
-    topServoStatus = false;
-    topServo.write(40);
-  }
-
-  if (topServoStatus && topServoChange != 0) {
-    int topServoAngle = topServo.read();
-    if (topServoChange == 1) {
-      topServoChange += 3;
-    }history-button
+  if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";
     status += String(config.targetOxygen);
 
@@ -397,6 +442,4 @@ void loop() {
 
     displayTime = time;
   }
-
-  delay(10);
 }

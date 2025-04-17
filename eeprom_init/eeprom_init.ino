@@ -4,24 +4,28 @@ struct Config {
   float targetOxygen;
   float oxygenPumpCutOut;
   float oxygenTopServoCutOut;
-  int maxServoAngle;
-  int minServoAngle;
+  int maxServo;
+  int minServo;
   float multiReal;
   float boostReal;
   float multiMax;
   int servoBalanceCooldown;
+  int balanceMulti;
+  int maxBalance;
 };
 
 Config config = {
   7.0,
   10.0,
   10.0,
-  135,
-  45,
+  600,
+  150,
   2.0,
   3.0,
   30.0,
   100,
+  1,
+  225,
 };
 
 void setup() {
