@@ -9,7 +9,7 @@
 #define           UA_ANALOG_INPUT_PIN                 0             /* Analog input for lambda.*/
 #define           BUTTON_PIN                          8
 #define           PUMPS_SSR_PIN                       4
-#define           SERVO_BALANCE_COOLDOWN              300
+#define           SERVO_BALANCE_COOLDOWN              3000
 #define           DISPLAY_COOLDOWN                    50
 #define           WEBSOCKET_COOLDOWN                  100
 #define           TOP_SERVO                           9
