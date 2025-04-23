@@ -12,6 +12,10 @@ struct Config {
   int servoBalanceCooldown;
   int balanceMulti;
   int maxBalance;
+  int topCloseSpeed;
+  int topOpenSpeed;
+  int topMaxServo;
+  int topMinServo;
 };
 
 Config config = {
@@ -26,6 +30,10 @@ Config config = {
   100,
   1,
   225,
+  1,
+  1,
+  600,
+  300,
 };
 
 void setup() {

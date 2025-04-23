@@ -132,7 +132,7 @@ ipButton.addEventListener("click", () => {
         oxygen.update();
 
         servo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
-        servo.data.datasets[0].data.push(msg.balance + 85);
+        servo.data.datasets[0].data.push(msg.balance + msg.balanceCenter);
         servo.data.datasets[1].data.push(msg.servo);
 
         deleteHistory(servo);
@@ -142,7 +142,10 @@ ipButton.addEventListener("click", () => {
         topServo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
         topServo.data.datasets[0].data.push(msg.topServo);
 
-        deleteHistory(topServo);
+        if (topServo.data.datasets[0].data.length > history) {
+            topServo.data.datasets[0].data = topServo.data.datasets[0].data.slice(topServo.data.datasets[0].data.length - history);
+            topServo.data.labels = servo.data.labels.slice(topServo.data.labels.length - history);
+        }
 
         topServo.update();
     });
@@ -187,3 +190,7 @@ button("multi-max", "M", true);
 button("servo-balance-cooldown", "V", true);
 button("balance-multi", "L", true);
 button("max-balance", "X", true);
+button("top-open", "P", true);
+button("top-close", "Z", true);
+button("top-min", "J", true);
+button("top-max", "G", true);

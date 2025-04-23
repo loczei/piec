@@ -53,9 +53,12 @@ main > div {
 }
 
 .options {
-    flex: 0 0 700px;
+    flex: 0 0 1200px;
     background-color: darkcyan;
     padding: 10px;
+}
+.options > button {
+    width: 20%;
 }
 
 #history {
