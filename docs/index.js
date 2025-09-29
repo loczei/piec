@@ -105,6 +105,8 @@ function deleteHistory(target) {
     }
 }
 
+let updateFuncs = [];
+
 ipButton.addEventListener("click", () => {
     console.log("Connecting");
     let ip = document.querySelector("#ip").value;
@@ -148,6 +150,8 @@ ipButton.addEventListener("click", () => {
         }
 
         topServo.update();
+
+        updateFuncs.forEach((e) => e(msg));
     });
 
     socket.addEventListener("close", () => {
@@ -162,7 +166,21 @@ ipButton.addEventListener("click", () => {
     });
 });
 
-function button(name, char, payload) {
+function button(name, char, payload, oname, odesc, pname) {
+    if (oname !== undefined) {
+        document.querySelector(".options").insertAdjacentHTML("beforeend", `
+        <div class="option">
+            <div class="option-name option-${name}">${oname} (brak połączenia): </div>
+            <div class="option-desc">${odesc}</div>
+            <div class="option-input"><input type="text" id="${name}"><button id="${name}-button">Ustaw</button></div>
+        </div>
+    `);
+
+        updateFuncs.push((msg) => { 
+            document.querySelector(`.option-${name}`).innerHTML = `${oname} (${msg !== undefined && msg[pname] !== undefined ? msg[pname] : "błąd1"}):`;
+         })
+    }
+    
     document.querySelector(`#${name}-button`).addEventListener("click", () => {
         if (socket) {
             let str;
@@ -174,6 +192,9 @@ function button(name, char, payload) {
             
             socket.send(str);
         }
+
+        // console.log("TEst" + pname);
+        // updateFuncs.forEach((e) => e());
     });
 }
 
@@ -182,15 +203,15 @@ button("odciecie", "C", true);
 button("odciecie-servo", "O", true);
 button("pompy", "R", false);
 button("serwo", "S", false);
-button("min-angle", "I", true);
-button("max-angle", "A", true);
-button("multi-real", "U", true);
-button("boost-real", "E", true);
-button("multi-max", "M", true);
-button("servo-balance-cooldown", "V", true);
-button("balance-multi", "L", true);
-button("max-balance", "X", true);
-button("top-open", "P", true);
-button("top-close", "Z", true);
-button("top-min", "J", true);
-button("top-max", "G", true);
+button("min-angle", "I", true, "Minimalne wychylenie serwa", "Kontroluje minimalne wychelenie serwa głównego (tego które działa płynnie). <br> Wartości: 1-4096", "minServo");
+button("max-angle", "A", true, "Maksymalne wychylenie serwa", "Kontroluje maksylmalne wychelenie serwa głównego (tego które działa płynnie). <br> Wartości: 1-4096", "maxServo");
+button("multi-real", "U", true, "Mnożnik w czasie rzeczywistym", "Kontroluje jak szybko porusza się główne serwo. <br> Wartości (liczba rzeczywista tzn. z kropką np. 7.65): sens mają liczby od 1.0 do około 10.0", "multiReal");
+button("boost-real", "E", true, '"Dodatek" w czasie rzeczywstym', '"Dodatek", który jest dodawany do wychylenie serwa kiedy różnica tlenu będzie wynosiła więcej niż 3% tlenu.  <br> Wartości (liczba rzeczywista tzn. z kropką np. 7.65): sens mają liczby wzwyż od 1.0, ale wartość powinna być jak najmiejsza. Można ustawić na 0.0, aby wyłączyć ten "dodatek"', "boostReal");
+button("multi-max", "M", true, "Maksymalne wychylenie serwa w czasie rzeczywistym: ", "Kontroluje o ile może poruszyć się serwo. <br> Wartości (liczba rzeczywista tzn. z kropką np. 7.65): sens mają małe krotności mnożnika np. kiedy mnożnik jest równy 5.0, to tą wartość można ustawić na 20.0. Można też ustawić tę liczbę na bardzo dużo (1000.0 powinno wystarczyć), aby wyłączyć ten mechanizm", "multiMax");
+button("servo-balance-cooldown", "V", true, "Okres punktu równowagi (w milisekundach)", "Kontroluja jak często zmienia się punkt równowagi. <br> Wartości: dowolne dodatnie, sens mają wartości do 10000, bo większe wartości zabiją przeznaczenie tego mechanizmu. Najlepiej trzymać tą wartośc między 1 a 2000", "servoBalanceCooldown");
+button("balance-multi", "L", true, "Wartość zmiany punktu równowagi", "Kontroluje o ile zmienia się punkt równowagi. <br> Wartości: najlepiej zostawić na 1 i zmieniać okres.", "balanceMulti");
+button("max-balance", "X", true, "Maksymalne odychlenie od punktu równowagi", "Kontroluje jak bardzo serwo może się wychylić od punktu równowagi. <br> Wartości: od około 30 do 200 mają sens. Można też ustawić tę liczbę na bardzo dużo (1000 powinno wystarczyć), aby wyłączyć ten mechanizm", "maxBalance");
+button("top-open", "P", true, "Prędkość otwierania drugiego serwa", "Jeżeli serwo ma się otwierać natychmiastowo, ustawić na 1000. Jeżeli nie to ustawić pomiędzy 1 a 200.", "topOpenSpeed");
+button("top-close", "Z", true, "Prędkość zamykania drugiego serwa", "Jeżeli serwo ma się otwierać natychmiastowo, ustawić na 1000. Jeżeli nie to ustawić pomiędzy 1 a 200.", "topCloseSpeed");
+button("top-min", "J", true, "Minimalne wychylenie drugiego serwa", "Kontroluje minimalne wychelenie serwa drugiego (tego które skacze). <br> Wartości: 1-4096", "topMinServo");
+button("top-max", "G", true, "Maksymalne wychylenie drugiego serwa", "Kontroluje maksymalne wychelenie serwa drugiego (tego które skacze). <br> Wartości: 1-4096", "topMaxServo");
