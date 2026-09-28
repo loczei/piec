@@ -41,6 +41,12 @@ let servo = new Chart(servo_ctx, {
     },
     options: {
         animation: false,
+        scales: {
+            y: {
+                min: 0.0,
+                max: 100.0
+            }
+        }
     }
 });
 
