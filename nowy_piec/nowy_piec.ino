@@ -65,7 +65,7 @@ void printOnDisplay(const char* line1, const char* line2) {
 }
 
 void waitDisplay(const char* line, int d) {
-  int progess = d;
+  int progress = d;
   while (progress > 34) {
     String s = String(progress) + "/" + String(d) + " ms";
     printOnDisplay(line, String(progress).c_str());
@@ -425,9 +425,9 @@ void loop() {
     wsTime = time;
   }
 
-  // pinMode(BUTTON_PIN, OUTPUT);
-  // digitalWrite(BUTTON_PIN, HIGH);
-  // delay(5);
+  pinMode(BUTTON_PIN, OUTPUT);
+  digitalWrite(BUTTON_PIN, HIGH);
+  delay(5);
   pinMode(BUTTON_PIN, INPUT);
   bool buttonState = digitalRead(BUTTON_PIN);
 

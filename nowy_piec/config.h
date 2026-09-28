@@ -11,7 +11,7 @@
 #define           PUMPS_SSR_PIN                       4
 #define           SERVO_BALANCE_COOLDOWN              300
 #define           DISPLAY_COOLDOWN                    50
-#define           WEBSOCKET_COOLDOWN                  100
+#define           WEBSOCKET_COOLDOWN                  200
 #define           TOP_SERVO                           9
 
 //Define adjustable parameters.                        

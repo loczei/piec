@@ -34,7 +34,7 @@ let servo = new Chart(servo_ctx, {
         labels: [],
         datasets: [
         {
-            label: 'Wychylenie serwa [-]',
+            label: 'Wychylenie serwa [%]',
             data: [],
             fill: false,
         }]
@@ -97,7 +97,7 @@ ipButton.addEventListener("click", () => {
         oxygen.update();
 
         servo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
-        servo.data.datasets[0].data.push(msg.servo);
+        servo.data.datasets[0].data.push((msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100);
 
         if (history < oxygen.data.datasets[0].len) {
             oxygen.data.labels.shift();
