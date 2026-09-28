@@ -16,22 +16,14 @@
 #include "secrets.h"
 
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
-Servo servo;
-Servo topServo;
 unsigned long displayTime = 0;
 unsigned long wsTime = 0;
-unsigned long lastServoBalanceAdj = 0;
-int topServoStatus = true;
-int balanceCentre = 85;
 
 float oxygen = 0.0;
 float lambda = 0.0;
-bool pumpStatus = true;
-int servoBalance = 0;
-int temp_servoBalance = 0;
-int pumpCounter = 0;
-int pumpTime = 0;
-bool pump = true;
+unsigned long lastCheck = 0;
+unsigned long lastOverrideCheck = 0;
+int startTime = 0;
 
 int wifiStatus = WL_IDLE_STATUS;
 WiFiUDP Udp;  // A UDP instance to let us send and receive packets over UDP
@@ -41,26 +33,22 @@ WebSocketsServer server(80);
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x7F, Wire);
 int servoPWM = 300;
-int topServoPWM = 300;
 
 bool wifi = false;
 
 struct Config {
   float targetOxygen;
-  float oxygenPumpCutOut;
-  float oxygenTopServoCutOut;
+  float deadZone;
+  float overdrive;
   int maxServo;
   int minServo;
-  float multiReal;
-  float boostReal;
-  float multiMax;
-  int servoBalanceCooldown;
-  int balanceMulti;
-  int maxBalance;
-  int topCloseSpeed;
-  int topOpenSpeed;
-  int topMaxServo;
-  int topMinServo;
+  int openStep;
+  int closeStep;
+  int waitTime;
+  int startPosition;
+  int initialWaitTime;
+  int overdriveStep;
+  int checkTime;
 };
 
 Config config;
@@ -68,6 +56,7 @@ Config config;
 void printOnDisplay(const char* line1, const char* line2) {
   display.clearDisplay();
   display.setCursor(0, 0);
+
   display.println(line1);
   display.println(line2);
 
@@ -75,13 +64,24 @@ void printOnDisplay(const char* line1, const char* line2) {
   display.display();
 }
 
+void waitDisplay(const char* line, int d) {
+  int progess = d;
+  while (progress > 34) {
+    String s = String(progress) + "/" + String(d) + " ms";
+    printOnDisplay(line, String(progress).c_str());
+    progress -= 34;
+    delay(34);
+  }
+  delay(progress);
+}
 
 void connectToWiFi() {
+  printOnDisplay("WiFi", "Prosze czekac");
+
   // check for the WiFi module:
   if (WiFi.status() == WL_NO_MODULE) {
     Serial.println("Communication with WiFi module failed!");
-    printOnDisplay("WiFi Err", "Prosze czekac");
-    delay(5000);
+    waitDisplay("Blad WiFi", 5000);
     return;
   }
 
@@ -92,7 +92,7 @@ void connectToWiFi() {
     // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
     wifiStatus = WiFi.begin(SSID, PASSWORD);
     // wait 10 seconds for connection:
-    delay(10000);
+    waitDisplay("WiFi", 10000);
 
     pinMode(BUTTON_PIN, OUTPUT);
     digitalWrite(BUTTON_PIN, HIGH);
@@ -101,7 +101,7 @@ void connectToWiFi() {
     bool buttonState = digitalRead(BUTTON_PIN);
 
     if (buttonState == 0) {
-      printOnDisplay("Anulowanie", "Prosze czekac");
+      waitDisplay("Wyl. WiFi", 2000);
       delay(2000);
 
       wifi = false;
@@ -114,20 +114,12 @@ void connectToWiFi() {
   Serial.println(WiFi.localIP());
 }
 
-void calculateBalanceCenter() {
-  balanceCentre = config.minServo + ((config.maxServo - config.minServo) / 2);
-
-  Serial.print("New balance center: ");
-  Serial.println(balanceCentre);
-}
-
 void setup() {
   //Set up serial communication.
   Serial.begin(9600);
 
   pinMode(PUMPS_SSR_PIN, OUTPUT);
   EEPROM.get(0, config);
-  calculateBalanceCenter();
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // Address 0x3C for 128x32
   display.display();
@@ -141,10 +133,10 @@ void setup() {
   display.setCursor(0, 0);
   display.display();
 
-  printOnDisplay("WiFi Con", "Prosze czekac");
+
   connectToWiFi();
 
-  printOnDisplay("RTC Update", "Prosze czekac");
+  printOnDisplay("Pob. czas.", "");
   RTC.begin();
   if (wifi) {
     Serial.println("\nStarting connection to server...");
@@ -165,19 +157,16 @@ void setup() {
     server.onEvent(webSocketEvent);
   }
 
-  printOnDisplay("Test serwa", "Prosze czekac");
-  servo.attach(ANALOG_OUTPUT_PIN);  // attaches the servo on pin 9 to the servo object
-  topServo.attach(TOP_SERVO);
-
   pwm.begin();
   pwm.setPWMFreq(50);
+  pwm.setPWM(0, 0, config.startPosition);
 
   cj125Init();
   start();
 
   Serial.println("WERSJA 1");
 
-  lastServoBalanceAdj = 0;
+  lastCheck = lastOverrideCheck = startTime = millis();
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
@@ -239,17 +228,41 @@ void sendData() {
   str += ", \"servo\": ";
   str += String(servoPWM);
 
-  str += ", \"pump\": ";
-  str += String(pumpStatus);
+  str += ", \"deadZone\": ";
+  str += String(config.deadZone);
 
-  str += ", \"balance\": ";
-  str += String(servoBalance);
+  str += ", \"overdrive\": ";
+  str += String(config.overdrive);
 
-  str += ", \"topServo\": ";
-  str += String(topServoPWM);
+  str += ", \"maxServo\": ";
+  str += String(config.maxServo);
 
-  str += ", \"balanceCenter\": ";
-  str += String(balanceCentre);
+  str += ", \"minServo\": ";
+  str += String(config.minServo);
+
+  str += ", \"openStep\": ";
+  str += String(config.openStep);
+
+  str += ", \"closeStep\": ";
+  str += String(config.closeStep);
+
+  str += ", \"closeStep\": ";
+  str += String(config.closeStep);
+
+  str += ", \"waitTime\": ";
+  str += String(config.waitTime);
+
+  str += ", \"startPosition\": ";
+  str += String(config.startPosition);
+
+  str += ", \"initialWaitTime\": ";
+  str += String(config.initialWaitTime);
+
+  str += ", \"overdriveStep\": ";
+  str += String(config.overdriveStep);
+
+  str += ", \"checkTime\": ";
+  str += String(config.checkTime);
 
   str += " }";
 
@@ -259,123 +272,129 @@ void sendData() {
 void getData(uint8_t* payload) {
   auto str = String((char*)payload);
 
-  if (str[0] == 'T') {
-    float temp = str.substring(2, str.length()).toFloat();
-    if (temp < 0.05) return;
-    config.targetOxygen = temp;
-    Serial.print("New target oxygen: ");
-    Serial.println(config.targetOxygen);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'C') {
-    float temp = str.substring(2, str.length()).toFloat();
-    if (temp < 0.05) return;
-    config.oxygenPumpCutOut = temp;
-    Serial.print("New Oxygen pump cut out value: ");
-    Serial.println(config.oxygenPumpCutOut);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'R') {
-    pumpStatus = true;
-    pinMode(PUMPS_SSR_PIN, OUTPUT);
-    digitalWrite(PUMPS_SSR_PIN, HIGH);
-  } else if (str[0] == 'S') {
-    topServoStatus = true;
-    topServo.write(130);
-  } else if (str[0] == 'O') {
-    float temp = str.substring(2, str.length()).toFloat();
-    if (temp < 0.05) return;
-    config.oxygenTopServoCutOut = temp;
-    Serial.print("New top servo cut out value: ");
-    Serial.println(config.oxygenTopServoCutOut);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'I') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.minServo = temp;
-    Serial.print("New min servo value: ");
-    Serial.println(config.minServo);
-    EEPROM.put(0, config);
+  switch (str[0]) {
+    case 'T': {
+      float temp = str.substring(2, str.length()).toFloat();
+      if (temp < 0.00) return;
 
-    calculateBalanceCenter();
-  } else if (str[0] == 'A') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.maxServo = temp;
-    Serial.print("New max servo value: ");
-    Serial.println(config.maxServo);
-    EEPROM.put(0, config);
+      config.targetOxygen = temp;
+      Serial.print("New target oxygen: ");
+      Serial.println(config.targetOxygen);
+      EEPROM.put(0, config);
+    } break;
 
-    calculateBalanceCenter();
-  } else if (str[0] == 'U') {
-    float temp = str.substring(2, str.length()).toFloat();
-    if (temp < 0.05) return;
-    config.multiReal = temp;
-    Serial.print("New multiplier real value: ");
-    Serial.println(config.multiReal);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'E') {
-    float temp = str.substring(2, str.length()).toFloat();
-    if (temp < 0.05) return;
-    config.boostReal = temp;
-    Serial.print("New boost real value: ");
-    Serial.println(config.boostReal);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'M') {
-    float temp = str.substring(2, str.length()).toFloat();
-    if (temp < 0.05) return;
-    config.multiMax = temp;
-    Serial.print("New multiplier maximum value: ");
-    Serial.println(config.multiMax);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'V') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.servoBalanceCooldown = temp;
-    Serial.print("New servo balance cooldown value: ");
-    Serial.println(config.servoBalanceCooldown);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'L') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.balanceMulti = temp;
-    Serial.print("New balance multiplier value: ");
-    Serial.println(config.balanceMulti);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'X') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.maxBalance = temp;
-    Serial.print("New max balance value: ");
-    Serial.println(config.maxBalance);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'P') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.topOpenSpeed = temp;
-    Serial.print("New top opening speed value: ");
-    Serial.println(config.topOpenSpeed);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'Z') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.topCloseSpeed = temp;
-    Serial.print("New top closing speed value: ");
-    Serial.println(config.topCloseSpeed);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'G') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.topMaxServo = temp;
-    Serial.print("New top max value: ");
-    Serial.println(config.topMaxServo);
-    EEPROM.put(0, config);
-  } else if (str[0] == 'J') {
-    int temp = str.substring(2, str.length()).toInt();
-    if (temp < 0) return;
-    config.topMinServo = temp;
-    Serial.print("New top min value: ");
-    Serial.println(config.topMinServo);
-    EEPROM.put(0, config);
+    case 'd': {
+      float temp = str.substring(2, str.length()).toFloat();
+      if (temp < 0.00) return;
+
+      config.deadZone = temp;
+      Serial.print("New deadzone: ");
+      Serial.println(config.deadZone);
+
+    } break;
+
+    case 'o': {
+      float temp = str.substring(2, str.length()).toFloat();
+      if (temp < 0.00) return;
+
+      config.overdrive = temp;
+      Serial.print("New overdrive: ");
+      Serial.println(config.overdrive);
+
+    } break;
+
+    case 'S': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0 || temp > 4096) return;
+
+      config.maxServo = temp;
+      Serial.print("New maxServo: ");
+      Serial.println(config.maxServo);
+
+    } break;
+
+    case 's': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0 || temp > 4096) return;
+
+      config.minServo = temp;
+      Serial.print("New minServo: ");
+      Serial.println(config.minServo);
+
+    } break;
+
+    case 't': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0 || temp > 4096) return;
+
+      config.openStep = temp;
+      Serial.print("New openStep: ");
+      Serial.println(config.openStep);
+
+    } break;
+
+    case 'c': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0 || temp > 4096) return;
+
+      config.closeStep = temp;
+      Serial.print("New closeStep: ");
+      Serial.println(config.closeStep);
+
+    } break;
+
+    case 'w': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 50) return;
+
+      config.waitTime = temp;
+      Serial.print("New waitTime: ");
+      Serial.println(config.waitTime);
+
+    } break;
+
+    case 'p': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.startPosition = temp;
+      Serial.print("New startPosition: ");
+      Serial.println(config.startPosition);
+
+    } break;
+
+    case 'i': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.initialWaitTime = temp;
+      Serial.print("New initialWaitTime: ");
+      Serial.println(config.initialWaitTime);
+
+    } break;
+
+    case 'e': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 50) return;
+
+      config.checkTime = temp;
+      Serial.print("New checkTime: ");
+      Serial.println(config.checkTime);
+
+    } break;
+
+    case 'O': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.overdriveStep = temp;
+      Serial.print("New overdriveStep: ");
+      Serial.println(config.overdriveStep);
+
+    } break;
   }
+
+  EEPROM.put(0, config);
 }
 
 //Infinite loop.
@@ -386,16 +405,12 @@ void loop() {
   if (time < wsTime) {
     wsTime = time;
     displayTime = time;
-    lastServoBalanceAdj = time;
+    lastCheck = time;
+    lastOverrideCheck = time;
+    startTime = 0;
   }
 
   cj125Update();
-
-  if (oxygen > config.oxygenPumpCutOut) {
-    pumpStatus = false;
-    pinMode(PUMPS_SSR_PIN, OUTPUT);
-    digitalWrite(PUMPS_SSR_PIN, LOW); 
-  }
 
   if (WEBSOCKET_COOLDOWN + wsTime <= time) {
     if (wifi) {
@@ -410,90 +425,14 @@ void loop() {
     wsTime = time;
   }
 
-  pinMode(BUTTON_PIN, OUTPUT);
-  digitalWrite(BUTTON_PIN, HIGH);
-  delay(5);
+  // pinMode(BUTTON_PIN, OUTPUT);
+  // digitalWrite(BUTTON_PIN, HIGH);
+  // delay(5);
   pinMode(BUTTON_PIN, INPUT);
   bool buttonState = digitalRead(BUTTON_PIN);
 
-  if (buttonState == 0) {
-    if (config.targetOxygen < 25.0) {
-      config.targetOxygen += 0.25;
-    } else if (config.targetOxygen >= 25) {
-      config.targetOxygen = 0;
-    }
-  }
-
   float diff = oxygen - config.targetOxygen;
   int temp_angle = servoPWM;
-
-  //
-  // First step:
-  // Adjust servo angle in real time
-  //
-
-  if (diff > 0.0 && temp_angle >= config.minServo) {
-    temp_angle = temp_angle - ceil(diff) * config.multiReal;
-    if (diff >= 3) temp_angle = temp_angle - config.boostReal;
-  } else if (diff < 0.0 && temp_angle <= config.maxServo) {
-    temp_angle = temp_angle - floor(diff) * config.multiReal;
-    if (diff <= -3) temp_angle = temp_angle + config.boostReal;
-  }
-
-  float max_angle = abs(config.multiMax * diff);
-
-  bool cooldown = false;
-
-  if (time >= lastServoBalanceAdj + config.servoBalanceCooldown) {
-    lastServoBalanceAdj = time;
-    cooldown = true;
-
-    if (diff > 0.2) {
-      servoBalance -= config.balanceMulti;
-    } else if (diff < -0.2) {
-      servoBalance += config.balanceMulti;
-    } if (diff < -0.5) {
-      servoBalance += config.balanceMulti;
-    } else if (diff > 0.5) {
-      servoBalance -= config.balanceMulti;
-    } if (diff < -1.0) {
-      servoBalance += config.balanceMulti;
-    } else if (diff > 1.0) {
-      servoBalance -= config.balanceMulti;
-    }
-
-    if (servoBalance > config.maxBalance) servoBalance = config.maxBalance;
-    if (servoBalance < -config.maxBalance) servoBalance = -config.maxBalance;
-  }
-
-  if (abs(diff) > 0.25) max_angle *= 0.75 + min(abs(diff), 1.75);
-
-  if (diff > 0.0) {
-    temp_angle = max(balanceCentre + servoBalance - max_angle, temp_angle);
-  } else { 
-    temp_angle = min(balanceCentre + servoBalance + max_angle, temp_angle);
-  }
-
-  //if (oxygen < 0.05) temp_angle=40;
-
-  if (temp_angle < config.minServo) temp_angle = config.minServo;
-  if (temp_angle > config.maxServo) temp_angle = config.maxServo;
-
-  servoPWM = temp_angle;
-  pwm.setPWM(0, 0, temp_angle);
-
-  int topTemp = topServoPWM;
-  if (diff > 1.5) {
-    topTemp += config.topOpenSpeed;
-  } else {
-    topTemp -= config.topCloseSpeed;
-  }
-
-  if (topTemp < config.topMinServo) topTemp = config.topMinServo;
-  if (topTemp > config.topMaxServo) topTemp = config.topMaxServo;
-
-  topServoPWM = topTemp;
-  pwm.setPWM(1, 0, topServoPWM);
 
   if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";
@@ -505,92 +444,37 @@ void loop() {
     printOnDisplay(status.c_str(), status2.c_str());
 
     displayTime = time;
+
+    if (buttonState == 0) {
+      if (config.targetOxygen < 25.0) {
+        config.targetOxygen += 0.25;
+      } else if (config.targetOxygen >= 25) {
+        config.targetOxygen = 0;
+      }
+    }
   }
 
-  diff = config.targetOxygen - oxygen;
-  temp_angle = servo.read();
+  if (startTime + config.initialWaitTime > time) return;
 
-  // int topServoChange = 0;
+  if (config.waitTime + lastCheck <= time) {
+    if (diff > config.deadZone) temp_angle -= config.closeStep;
+    if (diff < -config.deadZone) temp_angle += config.openStep;
 
-  // if (time >= lastServoBalanceAdj + SERVO_BALANCE_COOLDOWN) {
-  //   lastServoBalanceAdj = time;
-  //   // Serial.println("3 seconds passed!");
+    lastCheck = time;
+  }
 
-  //   topServoChange = -1;
 
-  //   if (diff > 0.2) {
-  //     temp_angle += 1;
-  //   } else if (diff < -0.2) {
-  //     temp_angle -= 1;
-  //   }
-  //   if (diff < -0.5) {
-  //     temp_angle -= 1;
-  //   } else if (diff > 0.5) {
-  //     temp_angle += 1;
-  //   }
-  //   if (diff < -1.0) {
-  //     temp_angle -= 1;
-  //   } else if (diff > 1.0) {
-  //     temp_angle += 1;
-  //     topServoChange += 2;
-  //   }
-  // }
+  if (config.checkTime + lastOverrideCheck <= time) {
+    if (diff > config.overdrive) temp_angle -= config.overdriveStep;
+    if (diff < -config.overdrive) temp_angle += config.overdriveStep;
 
-    //if (oxygen < 0.05) temp_angle=40;
+    lastOverrideCheck = time;
+  }
 
-    // if (temp_angle < 85) temp_angle = 85;
-    // if (temp_angle > 130) temp_angle = 130;
+  if (temp_angle != servoPWM) {
+    temp_angle = constrain(temp_angle, config.minServo, config.maxServo);
 
-    // servo.write(temp_angle);
-
-    if (diff > 0.0 && temp_angle >= 35) {
-      temp_angle=temp_angle-ceil(diff) * 2;
-      if (diff >= 3) temp_angle=temp_angle-2;
-    }
-
-    if (((diff)<0)  && temp_angle<=130 ) {
-      temp_angle=temp_angle-floor(diff) * 2;
-      if (diff <= -3) temp_angle=temp_angle+2;
-    }
-    max_angle = abs(45 * (diff / 1.5));
-
-    if (cooldown) {
-      // Serial.println("3 seconds passed!");
-
-      if (diff > 0.2) {
-        temp_servoBalance -= 1;
-      } else if (diff < -0.2) {
-        temp_servoBalance += 1;
-      } if (diff < -0.5) {
-        servoBalance += 1;
-      } else if (diff > 0.5) {
-        temp_servoBalance -= 1;
-      } if (diff < -1.0) {
-        temp_servoBalance += 1;
-      } else if (diff > 1.0) {
-        temp_servoBalance -= 1;
-      }
-
-      Serial.println(temp_servoBalance);
-
-      // servoBalance += ceil(max(diff, 1.0));
-
-      if (temp_servoBalance > 50) temp_servoBalance = 50;
-      if (temp_servoBalance < -50) temp_servoBalance = -50;
-    }
-
-    if (abs(diff) > 0.25) max_angle *= 0.75 + min(abs(diff), 1.75);
-
-    if (diff > 0.0) {
-      temp_angle = max(85 + temp_servoBalance - max_angle, temp_angle);
-    } else {
-      temp_angle = min(85 + temp_servoBalance + max_angle, temp_angle);
-    }
-
-    //if (oxygen < 0.05) temp_angle=40;
-
-    if (temp_angle <40) temp_angle=40;
-    if (temp_angle >130) temp_angle=130;
-
-    servo.write(temp_angle);
+    servoPWM = temp_angle;
+    pwm.setPWM(0, 0, temp_angle);
+  }
 }

@@ -2,38 +2,32 @@
 
 struct Config {
   float targetOxygen;
-  float oxygenPumpCutOut;
-  float oxygenTopServoCutOut;
+  float deadZone;
+  float overdrive;
   int maxServo;
   int minServo;
-  float multiReal;
-  float boostReal;
-  float multiMax;
-  int servoBalanceCooldown;
-  int balanceMulti;
-  int maxBalance;
-  int topCloseSpeed;
-  int topOpenSpeed;
-  int topMaxServo;
-  int topMinServo;
+  int openStep;
+  int closeStep;
+  int waitTime;
+  int startPosition;
+  int initialWaitTime;
+  int overdriveStep;
+  int checkTime;
 };
 
 Config config = {
   7.0,
-  10.0,
-  10.0,
+  0.25,
+  1.0,
   600,
   150,
-  2.0,
-  3.0,
-  30.0,
-  100,
-  1,
-  225,
   1,
   1,
-  600,
-  300,
+  400,
+  400,
+  1000,
+  1,
+  100
 };
 
 void setup() {

@@ -199,7 +199,7 @@ float Lookup_Oxygen(int Input_ADC) {
 
 void start() {
 
-  printOnDisplay("start lambda", "Prosze czekac");
+  printOnDisplay("wla. cj125", "Prosze czekac");
   
   //Wait until everything is ready.
   while (adcValue_UB < UBAT_MIN || CJ125_Status != CJ125_DIAG_REG_STATUS_OK) {
@@ -213,7 +213,7 @@ void start() {
       Serial.print(CJ125_Status, HEX);
       Serial.print("\n\r");
 
-      printOnDisplay("err cj125", "Prosze czekac");
+      printOnDisplay("blad cj125", "Prosze czekac");
     }
 
     //Read input voltage.

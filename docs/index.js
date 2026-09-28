@@ -5,20 +5,18 @@ let oxygen = new Chart(oxygen_ctx, {
     data: {
         labels: [],
         datasets: [{
-            label: 'Poziom tlenu',
+            label: 'Poziom tlenu [%]',
             data: [],
             fill: false,
         },
         {
-            label: 'Zadany tlen',
+            label: 'Zadany tlen [%]',
             data: [],
             fill: false,
         }]
     },
     options: {
-        animation: {
-            duration: 0,
-        },
+        animation: false,
         scales: {
             y: {
                 min: 0.0,
@@ -34,40 +32,15 @@ let servo = new Chart(servo_ctx, {
     type: 'line',
     data: {
         labels: [],
-        datasets: [{
-            label: 'Punkt równowagi',
-            data: [],
-            fill: false,
-        },
+        datasets: [
         {
-            label: 'Wychylenie serwa',
+            label: 'Wychylenie serwa [-]',
             data: [],
             fill: false,
         }]
     },
     options: {
-        animation: {
-            duration: 0,
-        },
-    }
-});
-
-const topServo_ctx = document.getElementById('serwo-gorne');
-
-let topServo = new Chart(topServo_ctx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [{
-            label: 'Wychylenie serwa',
-            data: [],
-            fill: false,
-        }]
-    },
-    options: {
-        animation: {
-            duration: 0,
-        },
+        animation: false,
     }
 });
 
@@ -97,14 +70,6 @@ let socket;
 
 const ipButton = document.querySelector('#ip-button');
 
-function deleteHistory(target) {
-    if (target.data.datasets[0].data.length > history) {
-        target.data.datasets[0].data = target.data.datasets[0].data.slice(target.data.datasets[0].data.length - history);
-        target.data.datasets[1].data = target.data.datasets[1].data.slice(target.data.datasets[1].data.length - history);
-        target.data.labels = target.data.labels.slice(target.data.labels.length - history);
-    }
-}
-
 let updateFuncs = [];
 
 ipButton.addEventListener("click", () => {
@@ -129,27 +94,21 @@ ipButton.addEventListener("click", () => {
         oxygen.data.datasets[0].data.push(msg.oxygen);
         oxygen.data.datasets[1].data.push(msg.target);
 
-        deleteHistory(oxygen);
-
         oxygen.update();
 
         servo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
-        servo.data.datasets[0].data.push(msg.balance + msg.balanceCenter);
-        servo.data.datasets[1].data.push(msg.servo);
+        servo.data.datasets[0].data.push(msg.servo);
 
-        deleteHistory(servo);
+        if (history < oxygen.data.datasets[0].len) {
+            oxygen.data.labels.shift();
+            oxygen.data.datasets[0].data.shift();
+            oxygen.data.datasets[1].data.shift();
 
-        servo.update();
-
-        topServo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
-        topServo.data.datasets[0].data.push(msg.topServo);
-
-        if (topServo.data.datasets[0].data.length > history) {
-            topServo.data.datasets[0].data = topServo.data.datasets[0].data.slice(topServo.data.datasets[0].data.length - history);
-            topServo.data.labels = servo.data.labels.slice(topServo.data.labels.length - history);
+            servo.data.labels.shift();
+            servo.data.datasets[0].data.shift();
         }
 
-        topServo.update();
+        servo.update();
 
         updateFuncs.forEach((e) => e(msg));
     });
@@ -169,16 +128,17 @@ ipButton.addEventListener("click", () => {
 function button(name, char, payload, oname, odesc, pname) {
     if (oname !== undefined) {
         document.querySelector(".options").insertAdjacentHTML("beforeend", `
-        <div class="option">
-            <div class="option-name option-${name}">${oname} (brak połączenia): </div>
-            <div class="option-desc">${odesc}</div>
-            <div class="option-input"><input type="text" id="${name}"><button id="${name}-button">Ustaw</button></div>
-        </div>
-    `);
+            <div class="option">
+                <div class="option-name option-${name}">${oname} (brak połączenia): </div>
+                <div class="option-desc">${odesc}</div>
+                <div class="option-input"><input type="text" id="${name}"><button id="${name}-button">Ustaw</button></div>
+            </div>
+        `);
 
         updateFuncs.push((msg) => { 
             document.querySelector(`.option-${name}`).innerHTML = `${oname} (${msg !== undefined && msg[pname] !== undefined ? msg[pname] : "błąd1"}):`;
-         })
+            if (msg[pname] !== undefined) document.querySelector(`#${name}`).value = msg[pname];
+        })
     }
     
     document.querySelector(`#${name}-button`).addEventListener("click", () => {
@@ -198,20 +158,102 @@ function button(name, char, payload, oname, odesc, pname) {
     });
 }
 
-button("zadana", "T", true);
-button("odciecie", "C", true);
-button("odciecie-servo", "O", true);
-button("pompy", "R", false);
-button("serwo", "S", false);
-button("min-angle", "I", true, "Minimalne wychylenie serwa", "Kontroluje minimalne wychelenie serwa głównego (tego które działa płynnie). <br> Wartości: 1-4096", "minServo");
-button("max-angle", "A", true, "Maksymalne wychylenie serwa", "Kontroluje maksylmalne wychelenie serwa głównego (tego które działa płynnie). <br> Wartości: 1-4096", "maxServo");
-button("multi-real", "U", true, "Mnożnik w czasie rzeczywistym", "Kontroluje jak szybko porusza się główne serwo. <br> Wartości (liczba rzeczywista tzn. z kropką np. 7.65): sens mają liczby od 1.0 do około 10.0", "multiReal");
-button("boost-real", "E", true, '"Dodatek" w czasie rzeczywstym', '"Dodatek", który jest dodawany do wychylenie serwa kiedy różnica tlenu będzie wynosiła więcej niż 3% tlenu.  <br> Wartości (liczba rzeczywista tzn. z kropką np. 7.65): sens mają liczby wzwyż od 1.0, ale wartość powinna być jak najmiejsza. Można ustawić na 0.0, aby wyłączyć ten "dodatek"', "boostReal");
-button("multi-max", "M", true, "Maksymalne wychylenie serwa w czasie rzeczywistym: ", "Kontroluje o ile może poruszyć się serwo. <br> Wartości (liczba rzeczywista tzn. z kropką np. 7.65): sens mają małe krotności mnożnika np. kiedy mnożnik jest równy 5.0, to tą wartość można ustawić na 20.0. Można też ustawić tę liczbę na bardzo dużo (1000.0 powinno wystarczyć), aby wyłączyć ten mechanizm", "multiMax");
-button("servo-balance-cooldown", "V", true, "Okres punktu równowagi (w milisekundach)", "Kontroluja jak często zmienia się punkt równowagi. <br> Wartości: dowolne dodatnie, sens mają wartości do 10000, bo większe wartości zabiją przeznaczenie tego mechanizmu. Najlepiej trzymać tą wartośc między 1 a 2000", "servoBalanceCooldown");
-button("balance-multi", "L", true, "Wartość zmiany punktu równowagi", "Kontroluje o ile zmienia się punkt równowagi. <br> Wartości: najlepiej zostawić na 1 i zmieniać okres.", "balanceMulti");
-button("max-balance", "X", true, "Maksymalne odychlenie od punktu równowagi", "Kontroluje jak bardzo serwo może się wychylić od punktu równowagi. <br> Wartości: od około 30 do 200 mają sens. Można też ustawić tę liczbę na bardzo dużo (1000 powinno wystarczyć), aby wyłączyć ten mechanizm", "maxBalance");
-button("top-open", "P", true, "Prędkość otwierania drugiego serwa", "Jeżeli serwo ma się otwierać natychmiastowo, ustawić na 1000. Jeżeli nie to ustawić pomiędzy 1 a 200.", "topOpenSpeed");
-button("top-close", "Z", true, "Prędkość zamykania drugiego serwa", "Jeżeli serwo ma się otwierać natychmiastowo, ustawić na 1000. Jeżeli nie to ustawić pomiędzy 1 a 200.", "topCloseSpeed");
-button("top-min", "J", true, "Minimalne wychylenie drugiego serwa", "Kontroluje minimalne wychelenie serwa drugiego (tego które skacze). <br> Wartości: 1-4096", "topMinServo");
-button("top-max", "G", true, "Maksymalne wychylenie drugiego serwa", "Kontroluje maksymalne wychelenie serwa drugiego (tego które skacze). <br> Wartości: 1-4096", "topMaxServo");
+const buttons = [
+    {
+        "name": "zadana",
+        "char": "T",
+        "payload": true,
+    },
+    {
+        "name": "deadzone",
+        "char": "d",
+        "payload": true,
+        "fullname": "Martwa strefa O₂ [%]",
+        "description": "Zakres wokół wartości zadanej, w którym serwo nie wykonuje żadnych ruchów. Wartości 0.00-25.00",
+        "arduinoname": "deadZone",
+    },
+    {
+        "name": "overdrive",
+        "char": "o",
+        "payload": true,
+        "fullname": "Próg szybkiej korekty O₂ [%]",
+        "description": "Po przekroczeniu określonej różnicy pomiędzy O₂ zmierzonym a zadanym regulator ma reagować szybciej. Wartości 0.00-25.00",
+        "arduinoname": "overdrive",
+    },
+    {
+        "name": "maxServo",
+        "char": "S",
+        "payload": true,
+        "fullname": "Maksymalne położenie klapki PW",
+        "description": "Regulowane ograniczenie, którego serwo nie może przekroczyć w kierunku pełnego otwarcia. Wartości: 0-4096",
+        "arduinoname": "maxServo",
+    },
+    {
+        "name": "minServo",
+        "char": "s",
+        "payload": true,
+        "fullname": "Minimalne położenie klapki PW",
+        "description": "Regulowane ograniczenie, którego serwo nie może przekroczyć w kierunku zamknięcia. Wartości: 0-4096",
+        "arduinoname": "minServo",
+    },
+    {
+        "name": "openStep",
+        "char": "t",
+        "payload": true,
+        "fullname": "Wielkość kroku OTWIERANIA klapki PW",
+        "description": "Wartości: 0-4096",
+        "arduinoname": "openStep",
+    },
+    {
+        "name": "closeStep",
+        "char": "c",
+        "payload": true,
+        "fullname": "Wielkość kroku ZAMYKANIA klapki PW",
+        "description": "Wartości: 0-4096",
+        "arduinoname": "closeStep",
+    },
+    {
+        "name": "waitTime",
+        "char": "w",
+        "payload": true,
+        "fullname": "Czas oczekiwania po wykonaniu kroku [ms]",
+        "description": "Po każdym ruchu serwo stoi przez ustawiony czas. Dopiero później wykonywana jest kolejna ocena O₂. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
+        "arduinoname": "waitTime",
+    },
+    {
+        "name": "startPosition",
+        "char": "p",
+        "payload": true,
+        "fullname": "Pozycja startowa klapki PW",
+        "description": "Pozycja klapki podczas uruchamiania procesu. Wartości 0-4096",
+        "arduinoname": "startPosition",
+    },
+    {
+        "name": "initialWaitTime",
+        "char": "i",
+        "payload": true,
+        "fullname": "Opóźnienie rozpoczęcia automatycznej regulacji O₂ [ms]",
+        "description": "Po uruchomieniu klapka pozostaje w pozycji startowej przez ustawiony czas. Dopiero później rozpoczyna się regulacja na podstawie O₂. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
+        "arduinoname": "initialWaitTime",
+    },
+    {
+        "name": "checkTime",
+        "char": "e",
+        "payload": true,
+        "fullname": "Czas oczekiwania szybkiej korekty [ms]",
+        "description": "Możliwość ustawienia krótszego czasu oczekiwania niż podczas normalnej regulacji.. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
+        "arduinoname": "checkTime",
+    },
+    {
+        "name": "overdriveStep",
+        "char": "O",
+        "payload": true,
+        "fullname": "Wielkość kroku szybkiej korekty",
+        "description": "Osobny, większy krok stosowany przy dużym błędzie O₂. Wartości 0-4096",
+        "arduinoname": "overdriveStep",
+    },
+];
+
+buttons.forEach((b) => {
+    button(b.name, b.char, b.payload, b.fullname, b.description, b.arduinoname)
+})
