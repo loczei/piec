@@ -24,6 +24,7 @@ float lambda = 0.0;
 unsigned long lastCheck = 0;
 unsigned long lastOverrideCheck = 0;
 int startTime = 0;
+bool pump = true;
 
 int wifiStatus = WL_IDLE_STATUS;
 WiFiUDP Udp;  // A UDP instance to let us send and receive packets over UDP
@@ -40,6 +41,7 @@ struct Config {
   float targetOxygen;
   float deadZone;
   float overdrive;
+  float oxygenPumpCutOut;
   int maxServo;
   int minServo;
   int openStep;
@@ -264,6 +266,9 @@ void sendData() {
   str += ", \"checkTime\": ";
   str += String(config.checkTime);
 
+  str += ", \"oxygenPumpCutOut\": ";
+  str += String(config.oxygenPumpCutOut);
+
   str += " }";
 
   server.broadcastTXT(str);
@@ -392,6 +397,16 @@ void getData(uint8_t* payload) {
       Serial.println(config.overdriveStep);
 
     } break;
+    
+    case 'P': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.oxygenPumpCutOut = temp;
+      Serial.print("New oxygenPumpCutOut: ");
+      Serial.println(config.oxygenPumpCutOut);
+
+    } break;
   }
 
   EEPROM.put(0, config);
@@ -455,6 +470,12 @@ void loop() {
   }
 
   if (startTime + config.initialWaitTime > time) return;
+
+  if (oxygen > config.oxygenPumpCutOut && pump) {
+    pump = false;
+    pinMode(PUMPS_SSR_PIN, OUTPUT);
+    digitalWrite(PUMPS_SSR_PIN, LOW); 
+  }
 
   if (config.waitTime + lastCheck <= time) {
     if (diff > config.deadZone) temp_angle -= config.closeStep;

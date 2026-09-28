@@ -4,6 +4,7 @@ struct Config {
   float targetOxygen;
   float deadZone;
   float overdrive;
+  float oxygenPumpCutOut;
   int maxServo;
   int minServo;
   int openStep;
@@ -19,6 +20,7 @@ Config config = {
   7.0,
   0.25,
   1.0,
+  10.0,
   415,
   315,
   1,

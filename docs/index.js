@@ -258,6 +258,14 @@ const buttons = [
         "description": "Osobny, większy krok stosowany przy dużym błędzie O₂. Wartości 0-4096",
         "arduinoname": "overdriveStep",
     },
+    {
+        "name": "oxygenPumpCutOut",
+        "char": "P",
+        "payload": true,
+        "fullname": "Próg odcięcia zasilania pompy [%]",
+        "description": "Wartości 0.00-25.00",
+        "arduinoname": "oxygenPumpCutOut",
+    },
 ];
 
 buttons.forEach((b) => {
