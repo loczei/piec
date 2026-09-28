@@ -143,7 +143,6 @@ function button(name, char, payload, oname, odesc, pname) {
 
         updateFuncs.push((msg) => { 
             document.querySelector(`.option-${name}`).innerHTML = `${oname} (${msg !== undefined && msg[pname] !== undefined ? msg[pname] : "błąd1"}):`;
-            if (msg[pname] !== undefined) document.querySelector(`#${name}`).value = msg[pname];
         })
     }
     
