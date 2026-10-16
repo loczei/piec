@@ -81,7 +81,7 @@ let updateFuncs = [];
 function updateInfo(msg) {
     document.querySelector(".info-oxygen").innerHTML = `Odczyt: ${msg.oxygen} Zadana: ${msg.target}`
     document.querySelector(".info-par").innerHTML =
-    `Wychylenie serwa: ${(msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100} Wychylenie serwa: ${msg.servo}  <br> Alpha: ${msg.alpha} Beta: ${msg.beta}`
+    `Wychylenie serwa: ${(msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100}% Wychylenie serwa: ${msg.servo}  <br> Alpha: ${msg.alpha} Beta: ${msg.beta}`
 }
 
 ipButton.addEventListener("click", () => {

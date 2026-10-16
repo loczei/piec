@@ -15,7 +15,7 @@
 #include "config.h"
 #include "secrets.h"
 
-Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
+Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire1);
 unsigned long displayTime = 0;
 unsigned long wsTime = 0;
 
