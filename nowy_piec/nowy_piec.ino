@@ -66,7 +66,6 @@ public:
     float beta = 0.0;
   };
 
-private:
   static constexpr uint8_t BUFFER_SIZE = 10;
   float data_x[BUFFER_SIZE] = {0};
   float data_y[BUFFER_SIZE] = {0};
@@ -360,10 +359,10 @@ void sendData() {
   str += String(config.alphaThreshold);
 
   str += ", \"alpha\": ";
-  str += String(regression.lastRegression.alpha);
+  str += String(regression.lastResult.alpha);
 
   str += ", \"beta\": ";
-  str += String(regression.lastRegression.beta);
+  str += String(regression.lastResult.beta);
 
   str += " }";
 
@@ -587,6 +586,9 @@ void loop() {
   int temp_angle = servoPWM;
 
   regression.updateData(oxygen);
+  auto reg = regression.calculateLinearRegression();
+
+  bool bypass = abs(reg.alpha) > config.alphaThreshold;
 
   if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";
@@ -610,30 +612,26 @@ void loop() {
 
   if (startTime + config.initialWaitTime > time) return;
 
-  if (oxygen > config.oxygenPumpCutOut && pump) {
+  if ((oxygen > config.oxygenPumpCutOut && pump)) {
     pump = false;
     pinMode(PUMPS_SSR_PIN, OUTPUT);
     digitalWrite(PUMPS_SSR_PIN, LOW); 
   }
 
-  if (config.waitTime + lastCheck <= time) {
-    auto reg = regression.calculateLinearRegression();
-
+  if (config.waitTime + lastCheck <= time || bypass) {
     float mul = config.neutralMulti;
-
-
 
     if (diff > config.deadZone) {
       if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
       if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
 
-      temp_angle -= ceil(float(config.closeStep) * mul);
+      temp_angle += floor(float(config.openStep) * mul);
     }
     if (diff < -config.deadZone) {
       if (config.alphaThreshold < reg.alpha) mul = config.fallMulti;
       if (-config.alphaThreshold > reg.alpha) mul = config.raiseMulti;
 
-      temp_angle += floor(float(config.openStep) * mul);
+      temp_angle -= ceil(float(config.closeStep) * mul);
     }
 
     lastCheck = time;
@@ -641,8 +639,6 @@ void loop() {
 
 
   if (config.checkTime + lastOverrideCheck <= time) {
-    auto reg = regression.calculateLinearRegression();
-
     float mul = config.neutralMulti;
 
     if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
@@ -652,13 +648,13 @@ void loop() {
       if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
       if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
 
-      temp_angle -= ceil(float(config.overdriveStep) * mul);
+      temp_angle += floor(float(config.overdriveStep) * mul);
     }
     if (diff < -config.overdrive) {
       if (config.alphaThreshold < reg.alpha) mul = config.fallMulti;
       if (-config.alphaThreshold > reg.alpha) mul = config.raiseMulti;
 
-      temp_angle += floor(float(config.overdriveStep) * mul);
+      temp_angle -= ceil(float(config.overdriveStep) * mul);
     }
 
     lastOverrideCheck = time;

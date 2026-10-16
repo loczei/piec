@@ -107,6 +107,8 @@ ipButton.addEventListener("click", () => {
         let millis = String(msg.time % 1000).padStart(3, '0');
         let seconds = String(totalSeconds % 60).padStart(2, '0');
         let minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+
+        let time = `${minutes}:${seconds}.${millis}`;
         
         oxygen.data.labels.push(time);
         oxygen.data.datasets[0].data.push(msg.oxygen);
