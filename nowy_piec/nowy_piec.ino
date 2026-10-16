@@ -42,6 +42,10 @@ struct Config {
   float deadZone;
   float overdrive;
   float oxygenPumpCutOut;
+  float raiseMulti;
+  float fallMulti;
+  float neutralMulti;
+  float alphaThreshold;
   int maxServo;
   int minServo;
   int openStep;
@@ -54,6 +58,83 @@ struct Config {
 };
 
 Config config;
+
+class Regression {
+public:
+  struct RegressionResult {
+    float alpha = 0.0;
+    float beta = 0.0;
+  };
+
+private:
+  static constexpr uint8_t BUFFER_SIZE = 10;
+  float data_x[BUFFER_SIZE] = {0};
+  float data_y[BUFFER_SIZE] = {0};
+
+  uint8_t count = 0;
+  uint8_t head = 0;
+
+  RegressionResult lastResult {};
+
+  struct Avg {
+    float x = 0.0;
+    float y = 0.0;
+  };
+
+  Avg calculateAverage() const {
+    float sum_x = 0.0;
+    float sum_y = 0.0;
+    for (uint8_t i = 0; i < count; i++) {
+      sum_x += data_x[i];
+      sum_y += data_y[i];
+    }
+    return Avg { sum_x / count, sum_y / count };
+  }
+
+public:
+  Regression() = default;
+
+  void updateData(float oxygen) {
+    data_x[head] = millis() / 1000.0f;
+    data_y[head] = oxygen;
+
+    head = (head + 1) % BUFFER_SIZE;
+    if (count < BUFFER_SIZE) {
+      count++;
+    }
+  }
+
+  bool isReady() const {
+    return count >= BUFFER_SIZE;
+  }
+
+  RegressionResult calculateLinearRegression() {
+    if (!isReady()) {
+      return lastResult;
+    }
+
+    Avg avg = calculateAverage();
+
+    float cov = 0.0;
+    float var = 0.0;
+
+    for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
+      float dx = data_x[i] - avg.x;
+      float dy = data_y[i] - avg.y;
+      cov += dx * dy;
+      var += dx * dx;
+    }
+
+    if (var > 0.00001f) {
+      lastResult.alpha = cov / var;
+      lastResult.beta = avg.y - (lastResult.alpha * avg.x);
+    }
+
+    return lastResult;
+  }
+};
+
+Regression regression;
 
 void printOnDisplay(const char* line1, const char* line2) {
   display.clearDisplay();
@@ -216,10 +297,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length)
 void sendData() {
   String str = "{ \"time\": \"";
 
-  RTCTime time;
-  RTC.getTime(time);
-  auto tm = time.getTmTime();
-  str += time.toString();
+  str += String(millis());
 
   str += "\", \"oxygen\": ";
   str += String(oxygen);
@@ -268,6 +346,24 @@ void sendData() {
 
   str += ", \"oxygenPumpCutOut\": ";
   str += String(config.oxygenPumpCutOut);
+
+  str += ", \"raiseMulti\": ";
+  str += String(config.raiseMulti);
+
+  str += ", \"fallMulti\": ";
+  str += String(config.fallMulti);
+
+  str += ", \"neutralMulti\": ";
+  str += String(config.neutralMulti);
+
+  str += ", \"alphaThreshold\": ";
+  str += String(config.alphaThreshold);
+
+  str += ", \"alpha\": ";
+  str += String(regression.lastRegression.alpha);
+
+  str += ", \"beta\": ";
+  str += String(regression.lastRegression.beta);
 
   str += " }";
 
@@ -407,6 +503,47 @@ void getData(uint8_t* payload) {
       Serial.println(config.oxygenPumpCutOut);
 
     } break;
+
+    case 'r': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.raiseMulti = temp;
+      Serial.print("New raiseMulti: ");
+      Serial.println(config.raiseMulti);
+
+    } break;
+
+    case 'f': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.fallMulti = temp;
+      Serial.print("New fallMulti: ");
+      Serial.println(config.fallMulti);
+
+    } break;
+
+    case 'n': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.neutralMulti = temp;
+      Serial.print("New neutralMulti: ");
+      Serial.println(config.neutralMulti);
+
+    } break;
+
+    case 'a': {
+      int temp = str.substring(2, str.length()).toInt();
+      if (temp < 0) return;
+
+      config.alphaThreshold = temp;
+      Serial.print("New alphaThreshold: ");
+      Serial.println(config.alphaThreshold);
+
+    } break;
+
   }
 
   EEPROM.put(0, config);
@@ -449,6 +586,8 @@ void loop() {
   float diff = oxygen - config.targetOxygen;
   int temp_angle = servoPWM;
 
+  regression.updateData(oxygen);
+
   if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";
     status += String(config.targetOxygen);
@@ -478,16 +617,49 @@ void loop() {
   }
 
   if (config.waitTime + lastCheck <= time) {
-    if (diff > config.deadZone) temp_angle -= config.closeStep;
-    if (diff < -config.deadZone) temp_angle += config.openStep;
+    auto reg = regression.calculateLinearRegression();
+
+    float mul = config.neutralMulti;
+
+
+
+    if (diff > config.deadZone) {
+      if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
+      if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
+
+      temp_angle -= ceil(float(config.closeStep) * mul);
+    }
+    if (diff < -config.deadZone) {
+      if (config.alphaThreshold < reg.alpha) mul = config.fallMulti;
+      if (-config.alphaThreshold > reg.alpha) mul = config.raiseMulti;
+
+      temp_angle += floor(float(config.openStep) * mul);
+    }
 
     lastCheck = time;
   }
 
 
   if (config.checkTime + lastOverrideCheck <= time) {
-    if (diff > config.overdrive) temp_angle -= config.overdriveStep;
-    if (diff < -config.overdrive) temp_angle += config.overdriveStep;
+    auto reg = regression.calculateLinearRegression();
+
+    float mul = config.neutralMulti;
+
+    if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
+    if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
+
+    if (diff > config.overdrive) {
+      if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
+      if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
+
+      temp_angle -= ceil(float(config.overdriveStep) * mul);
+    }
+    if (diff < -config.overdrive) {
+      if (config.alphaThreshold < reg.alpha) mul = config.fallMulti;
+      if (-config.alphaThreshold > reg.alpha) mul = config.raiseMulti;
+
+      temp_angle += floor(float(config.overdriveStep) * mul);
+    }
 
     lastOverrideCheck = time;
   }

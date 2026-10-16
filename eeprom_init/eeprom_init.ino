@@ -5,6 +5,10 @@ struct Config {
   float deadZone;
   float overdrive;
   float oxygenPumpCutOut;
+  float raiseMulti;
+  float fallMulti;
+  float neutralMulti;
+  float alphaThreshold;
   int maxServo;
   int minServo;
   int openStep;
@@ -21,6 +25,10 @@ Config config = {
   0.25,
   1.0,
   10.0,
+  1.0,
+  1.0,
+  1.0,
+  0.25,
   415,
   315,
   1,

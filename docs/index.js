@@ -78,6 +78,12 @@ const ipButton = document.querySelector('#ip-button');
 
 let updateFuncs = [];
 
+function updateInfo(msg) {
+    document.querySelector(".info-oxygen").innerHTML = `Odczyt: ${msg.oxygen} Zadana: ${msg.target}`
+    document.querySelector(".info-par").innerHTML =
+    `Wychylenie serwa: ${(msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100} Wychylenie serwa: ${msg.servo}  <br> Alpha: ${msg.alpha} Beta: ${msg.beta}`
+}
+
 ipButton.addEventListener("click", () => {
     console.log("Connecting");
     let ip = document.querySelector("#ip").value;
@@ -95,14 +101,20 @@ ipButton.addEventListener("click", () => {
     socket.addEventListener("message", (e) => {
         console.log(e.data);
         let msg = JSON.parse(e.data);
+
+        let totalSeconds = Math.floor(msg.time / 1000);
+
+        let millis = String(msg.time % 1000).padStart(3, '0');
+        let seconds = String(totalSeconds % 60).padStart(2, '0');
+        let minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
         
-        oxygen.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
+        oxygen.data.labels.push(time);
         oxygen.data.datasets[0].data.push(msg.oxygen);
         oxygen.data.datasets[1].data.push(msg.target);
 
         oxygen.update();
 
-        servo.data.labels.push(msg.time.substring(msg.time.indexOf("T")));
+        servo.data.labels.push(time);
         servo.data.datasets[0].data.push((msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100);
 
         if (history < oxygen.data.datasets[0].len) {
@@ -116,6 +128,7 @@ ipButton.addEventListener("click", () => {
 
         servo.update();
 
+        updateInfo(msg);
         updateFuncs.forEach((e) => e(msg));
     });
 
@@ -265,6 +278,38 @@ const buttons = [
         "description": "Wartości 0.00-25.00",
         "arduinoname": "oxygenPumpCutOut",
     },
+{
+    "name": "raiseMulti",
+    "char": "r",
+    "payload": true,
+    "fullname": "Mnożnik prędkości serwa przy wykryciu zwiększania różnicy [-]",
+    "description": "Wartości 0.00+",
+    "arduinoname": "raiseMulti",
+},
+{
+    "name": "fallMulti",
+    "char": "f",
+    "payload": true,
+    "fullname": "Mnożnik prędkości serwa przy wykryciu zmniejszania różnicy [-]",
+    "description": "Wartości 0.00+",
+    "arduinoname": "fallMulti",
+},
+{
+    "name": "neutralMulti",
+    "char": "n",
+    "payload": true,
+    "fullname": "Mnożnik prędkości serwa przy wykryciu braku zmiany różnicy [-]",
+    "description": "Wartości 0.00+",
+    "arduinoname": "neutralMulti",
+},
+{
+    "name": "alphaThreshold",
+    "char": "a",
+    "payload": true,
+    "fullname": "Próg wartości alpha decydującego czy mamy doczynienia ze znaczym zwiększeniem/zmniejszeniem różnicy [%]",
+    "description": "Wartości 0.00+",
+    "arduinoname": "alphaThreshold",
+},
 ];
 
 buttons.forEach((b) => {
