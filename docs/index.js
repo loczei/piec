@@ -214,7 +214,7 @@ const buttons = [
         "payload": true,
         "fullname": "Martwa strefa O₂ [%]",
         "description": "Zakres wokół wartości zadanej, w którym serwo nie wykonuje żadnych ruchów. Wartości 0.00-25.00",
-        "arduinoname": "deadZone",
+        "arduinoname": "Dead Zone",
     },
     {
         "name": "overdrive",
@@ -222,7 +222,7 @@ const buttons = [
         "payload": true,
         "fullname": "Próg szybkiej korekty O₂ [%]",
         "description": "Po przekroczeniu określonej różnicy pomiędzy O₂ zmierzonym a zadanym regulator ma reagować szybciej. Wartości 0.00-25.00",
-        "arduinoname": "overdrive",
+        "arduinoname": "Overdrive",
     },
     {
         "name": "maxServo",
@@ -230,7 +230,7 @@ const buttons = [
         "payload": true,
         "fullname": "Maksymalne położenie klapki PW",
         "description": "Regulowane ograniczenie, którego serwo nie może przekroczyć w kierunku pełnego otwarcia. Wartości: 0-4096",
-        "arduinoname": "maxServo",
+        "arduinoname": "Max Servo",
     },
     {
         "name": "minServo",
@@ -238,7 +238,7 @@ const buttons = [
         "payload": true,
         "fullname": "Minimalne położenie klapki PW",
         "description": "Regulowane ograniczenie, którego serwo nie może przekroczyć w kierunku zamknięcia. Wartości: 0-4096",
-        "arduinoname": "minServo",
+        "arduinoname": "Min Servo",
     },
     {
         "name": "openStep",
@@ -246,7 +246,7 @@ const buttons = [
         "payload": true,
         "fullname": "Wielkość kroku OTWIERANIA klapki PW",
         "description": "Wartości: 0-4096",
-        "arduinoname": "openStep",
+        "arduinoname": "Open Step",
     },
     {
         "name": "closeStep",
@@ -254,7 +254,7 @@ const buttons = [
         "payload": true,
         "fullname": "Wielkość kroku ZAMYKANIA klapki PW",
         "description": "Wartości: 0-4096",
-        "arduinoname": "closeStep",
+        "arduinoname": "Close Step",
     },
     {
         "name": "waitTime",
@@ -262,7 +262,7 @@ const buttons = [
         "payload": true,
         "fullname": "Czas oczekiwania po wykonaniu kroku [ms]",
         "description": "Po każdym ruchu serwo stoi przez ustawiony czas. Dopiero później wykonywana jest kolejna ocena O₂. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
-        "arduinoname": "waitTime",
+        "arduinoname": "Wait Time",
     },
     {
         "name": "startPosition",
@@ -270,7 +270,7 @@ const buttons = [
         "payload": true,
         "fullname": "Pozycja startowa klapki PW",
         "description": "Pozycja klapki podczas uruchamiania procesu. Wartości 0-4096",
-        "arduinoname": "startPosition",
+        "arduinoname": "Start Position",
     },
     {
         "name": "initialWaitTime",
@@ -278,7 +278,7 @@ const buttons = [
         "payload": true,
         "fullname": "Opóźnienie rozpoczęcia automatycznej regulacji O₂ [ms]",
         "description": "Po uruchomieniu klapka pozostaje w pozycji startowej przez ustawiony czas. Dopiero później rozpoczyna się regulacja na podstawie O₂. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
-        "arduinoname": "initialWaitTime",
+        "arduinoname": "Initial Wait Time",
     },
     {
         "name": "checkTime",
@@ -286,7 +286,7 @@ const buttons = [
         "payload": true,
         "fullname": "Czas oczekiwania szybkiej korekty [ms]",
         "description": "Możliwość ustawienia krótszego czasu oczekiwania niż podczas normalnej regulacji.. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
-        "arduinoname": "checkTime",
+        "arduinoname": "Check Time",
     },
     {
         "name": "overdriveStep",
@@ -294,7 +294,7 @@ const buttons = [
         "payload": true,
         "fullname": "Wielkość kroku szybkiej korekty",
         "description": "Osobny, większy krok stosowany przy dużym błędzie O₂. Wartości 0-4096",
-        "arduinoname": "overdriveStep",
+        "arduinoname": "Overdrive Step",
     },
     {
         "name": "oxygenPumpCutOut",
@@ -302,7 +302,7 @@ const buttons = [
         "payload": true,
         "fullname": "Próg odcięcia zasilania pompy [%]",
         "description": "Wartości 0.00-25.00",
-        "arduinoname": "oxygenPumpCutOut",
+        "arduinoname": "Oxygen Pump Cut Out",
     },
 {
     "name": "raiseMulti",
@@ -310,7 +310,7 @@ const buttons = [
     "payload": true,
     "fullname": "Mnożnik prędkości serwa przy wykryciu zwiększania różnicy [-]",
     "description": "Wartości 0.00+",
-    "arduinoname": "raiseMulti",
+    "arduinoname": "Raise Multi",
 },
 {
     "name": "fallMulti",
@@ -318,7 +318,7 @@ const buttons = [
     "payload": true,
     "fullname": "Mnożnik prędkości serwa przy wykryciu zmniejszania różnicy [-]",
     "description": "Wartości 0.00+",
-    "arduinoname": "fallMulti",
+    "arduinoname": "Fall Multi",
 },
 {
     "name": "neutralMulti",
@@ -326,7 +326,7 @@ const buttons = [
     "payload": true,
     "fullname": "Mnożnik prędkości serwa przy wykryciu braku zmiany różnicy [-]",
     "description": "Wartości 0.00+",
-    "arduinoname": "neutralMulti",
+    "arduinoname": "Neutral Multi",
 },
 {
     "name": "alphaThreshold",
@@ -334,7 +334,7 @@ const buttons = [
     "payload": true,
     "fullname": "Próg wartości alpha decydującego czy mamy doczynienia ze znaczym zwiększeniem/zmniejszeniem różnicy [%]",
     "description": "Wartości 0.00+",
-    "arduinoname": "alphaThreshold",
+    "arduinoname": "Alpha Threshold",
 },
 {
     "name": "dataAcquire",
@@ -342,7 +342,7 @@ const buttons = [
     "payload": true,
     "fullname": "Co jaki czas mają być zbierana dane do regresji [ms]",
     "description": "Wartości 0+",
-    "arduinoname": "dataAcquire",
+    "arduinoname": "Data Acquire",
 },
 ];
 

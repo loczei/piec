@@ -14,9 +14,12 @@
 #include <EEPROM.h>
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
+#include <type_traits>
 
 #include "config.h"
 #include "secrets.h"
+
+#define INT_MAX 2147483647
 
 Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire1);
 unsigned long displayTime = 0;
@@ -83,18 +86,6 @@ struct Config {
   int dataAcquire;
 };
 
-uint32_t get_compilation_hash() {
-   auto* data = static_cast<const uint8_t*>(&defaultConfig);
-  uint32_t hash = 2166136261u;
-
-  for (size_t i = 0; sizeof(defaultConfig) > i; i++) {
-    hash ^= data[i];
-    hash *= 16777619u;
-  }
-
-  return hash;
-}
-
 Config defaultConfig = {
   7.0,
   0.25,
@@ -115,6 +106,20 @@ Config defaultConfig = {
   100,
   50
 };
+
+uint32_t get_compilation_hash() {
+  auto* data = reinterpret_cast<const uint8_t*>(&defaultConfig);
+  uint32_t hash = 2166136261u;
+
+  for (size_t i = 0; sizeof(defaultConfig) > i; i++) {
+    hash ^= data[i];
+    hash *= 16777619u;
+  }
+
+  return hash;
+}
+
+
 
 struct ConfigHolder {
   uint32_t magic = 0x69420;
@@ -314,7 +319,7 @@ void setup() {
 
   pwm.begin();
   pwm.setPWMFreq(50);
-  pwm.setPWM(0, 0, config.startPosition);
+  pwm.setPWM(0, 0, configHolder.config.startPosition);
 
   cj125Init();
   start();
@@ -326,7 +331,7 @@ void setup() {
   Timer dataTimer;
 
   normalTimer.set_wait_time(configHolder.config.waitTime);
-  overrideTime.set_wait_time(configHolder.config.checkTime);
+  overrideTimer.set_wait_time(configHolder.config.checkTime);
   dataTimer.set_wait_time(configHolder.config.dataAcquire);
 
   startTime = millis();
@@ -405,8 +410,8 @@ public:
 
     T value{};
 
-    if constexpr (std::is_same_v(T, float))    value = str.substring(offset + 1).toFloat();
-    else if constexpr (std::is_same_v(T, int)) value = str.substring(offset + 1).toInt();
+    if constexpr (std::is_same_v<T, float>)    value = str.substring(offset + 1).toFloat();
+    else if constexpr (std::is_same_v<T, int>) value = str.substring(offset + 1).toInt();
 
     if (value < this->min || value > this->max) return;
 
@@ -433,7 +438,7 @@ public:
 //floats
 DataDescription<float> descTO("TO", "Target Oxygen", &configHolder.config.targetOxygen, 0.0f, 25.0f);
 DataDescription<float> descDZ("DZ", "Dead Zone", &configHolder.config.deadZone, 0.0f, 25.0f);
-DataDescription<float> descOv("Ov", "Override", &configHolder.config.overdrive, 0.0f, 25.0f);
+DataDescription<float> descOv("Ov", "Overdrive", &configHolder.config.overdrive, 0.0f, 25.0f);
 DataDescription<float> descOP("OP", "Oxygen Pump Cut Out", &configHolder.config.oxygenPumpCutOut, 0.0f, 25.0f);
 DataDescription<float> descRM("RM", "Raise Multi", &configHolder.config.raiseMulti, 0.0f, 1000.0f);
 DataDescription<float> descFM("FM", "Fall Multi", &configHolder.config.fallMulti, 0.0f, 1000.0f);
@@ -488,7 +493,7 @@ void getData(uint8_t* payload) {
   for (auto d : desc) d->update(str);
 
   normalTimer.set_wait_time(configHolder.config.waitTime);
-  overrideTime.set_wait_time(configHolder.config.checkTime);
+  overrideTimer.set_wait_time(configHolder.config.checkTime);
   dataTimer.set_wait_time(configHolder.config.dataAcquire);
 }
 
@@ -501,7 +506,7 @@ void loop() {
     wsTime = time;
     displayTime = time;
     normalTimer.set_wait_time(configHolder.config.waitTime);
-    overrideTime.set_wait_time(configHolder.config.checkTime);
+    overrideTimer.set_wait_time(configHolder.config.checkTime);
     dataTimer.set_wait_time(configHolder.config.dataAcquire);
     startTime = 0;
   }
@@ -532,12 +537,12 @@ void loop() {
 
   if (startTime + configHolder.config.dataAcquire)
 
-  auto reg = regression.lastResult;
-
   if (dataTimer.check_time()) {
     regression.updateData(oxygen);
-    reg = regression.calculateLinearRegression();
+    regression.calculateLinearRegression();
   }
+
+  auto reg = regression.lastResult;
 
   bool bypass = abs(reg.alpha) > configHolder.config.alphaThreshold;
 
@@ -584,8 +589,6 @@ void loop() {
 
       temp_angle -= ceil(float(configHolder.config.closeStep) * mul);
     }
-
-    lastCheck = time;
   }
 
 
@@ -607,8 +610,6 @@ void loop() {
 
       temp_angle -= ceil(float(configHolder.config.overdriveStep) * mul);
     }
-
-    lastOverrideCheck = time;
   }
 
   if (temp_angle != servoPWM) {
