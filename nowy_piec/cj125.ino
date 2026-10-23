@@ -1,3 +1,23 @@
+/*
+ *  My modification of the orginal example driver by Bylund Automotive AB
+ *
+ *  Copyright (C) 2026 Krzysztof Olek <blobyouty@gmail.com>
+ *  Copyright (C) 2017 - 2020 Bylund Automotive AB. (http://www.bylund-automotive.com/) <info@bylund-automotive.com>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 //Lambda Conversion Lookup Table. (ADC 39-791).
 const PROGMEM float Lambda_Conversion[753] {
   0.750, 0.751, 0.752, 0.752, 0.753, 0.754, 0.755, 0.755, 0.756, 0.757, 0.758, 0.758, 0.759, 0.760, 0.761, 0.761, 0.762, 0.763, 0.764, 0.764,

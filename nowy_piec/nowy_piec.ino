@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Krzysztof Olek <blobyouty@gmail.com>
+
 #include <Arduino.h>
 #include <SPI.h>
 #include <RTC.h>
@@ -21,10 +24,32 @@ unsigned long wsTime = 0;
 
 float oxygen = 0.0;
 float lambda = 0.0;
-unsigned long lastCheck = 0;
-unsigned long lastOverrideCheck = 0;
 int startTime = 0;
 bool pump = true;
+
+class Timer {
+public:
+  unsigned long lastCheck = 0;
+  int waitTime = 0;
+
+  void set_wait_time(int newWait) {
+    this->waitTime = newWait;
+    this->lastCheck = millis();
+  }
+
+  bool check_time(unsigned long time = millis()) {
+    if ((this->waitTime + this->lastCheck) <= time) {
+      this->lastCheck = time;
+      return true;
+    }
+
+    return false;
+  }
+};
+
+Timer normalTimer;
+Timer overrideTimer;
+Timer dataTimer;
 
 int wifiStatus = WL_IDLE_STATUS;
 WiFiUDP Udp;  // A UDP instance to let us send and receive packets over UDP
@@ -55,9 +80,49 @@ struct Config {
   int initialWaitTime;
   int overdriveStep;
   int checkTime;
+  int dataAcquire;
 };
 
-Config config;
+uint32_t get_compilation_hash() {
+   auto* data = static_cast<const uint8_t*>(&defaultConfig);
+  uint32_t hash = 2166136261u;
+
+  for (size_t i = 0; sizeof(defaultConfig) > i; i++) {
+    hash ^= data[i];
+    hash *= 16777619u;
+  }
+
+  return hash;
+}
+
+Config defaultConfig = {
+  7.0,
+  0.25,
+  1.0,
+  10.0,
+  1.0,
+  1.0,
+  1.0,
+  0.25,
+  415,
+  315,
+  1,
+  1,
+  400,
+  400,
+  1000,
+  1,
+  100,
+  50
+};
+
+struct ConfigHolder {
+  uint32_t magic = 0x69420;
+  uint32_t hash;
+  Config config;
+};
+
+ConfigHolder configHolder;
 
 class Regression {
 public:
@@ -66,7 +131,7 @@ public:
     float beta = 0.0;
   };
 
-  static constexpr uint8_t BUFFER_SIZE = 10;
+  static constexpr uint8_t BUFFER_SIZE = 20;
   float data_x[BUFFER_SIZE] = {0};
   float data_y[BUFFER_SIZE] = {0};
 
@@ -90,7 +155,6 @@ public:
     return Avg { sum_x / count, sum_y / count };
   }
 
-public:
   Regression() = default;
 
   void updateData(float oxygen) {
@@ -201,7 +265,16 @@ void setup() {
   Serial.begin(9600);
 
   pinMode(PUMPS_SSR_PIN, OUTPUT);
-  EEPROM.get(0, config);
+  EEPROM.get(0, configHolder);
+
+  uint32_t hash = get_compilation_hash();
+
+  if (configHolder.magic != 0x69420 || configHolder.hash != hash) {
+    configHolder.magic = 0x69420;
+    configHolder.hash = hash;
+    configHolder.config = defaultConfig;
+    EEPROM.put(0, configHolder);
+  }
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // Address 0x3C for 128x32
   display.display();
@@ -248,7 +321,15 @@ void setup() {
 
   Serial.println("WERSJA 1");
 
-  lastCheck = lastOverrideCheck = startTime = millis();
+  Timer normalTimer;
+  Timer overrideTimer;
+  Timer dataTimer;
+
+  normalTimer.set_wait_time(configHolder.config.waitTime);
+  overrideTime.set_wait_time(configHolder.config.checkTime);
+  dataTimer.set_wait_time(configHolder.config.dataAcquire);
+
+  startTime = millis();
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
@@ -293,6 +374,89 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length)
   }
 }
 
+class DataDescriptionBase {
+public:
+  virtual ~DataDescriptionBase() = default;
+
+  virtual void update(const String&) = 0;
+  virtual String get_json() = 0;
+};
+
+template<typename T>
+class DataDescription : public DataDescriptionBase {
+public:
+  const char* cmd;
+  const char* name;
+  T* ptr;
+  T min;
+  T max;
+
+  DataDescription(const char* cmd, const char* name, T* ptr, T min, T max)
+  : cmd(cmd), name(name), ptr(ptr), min(min), max(max) {}
+  ~DataDescription() = default;
+
+  void update(const String& str) {
+    // Command always follows pattern: "cmd value"
+
+    if (!str.startsWith(this->cmd)) return;
+
+    const uint8_t offset = strlen(this->cmd);
+    if (offset + 1 >= str.length() || str[offset] != ' ') return;
+
+    T value{};
+
+    if constexpr (std::is_same_v(T, float))    value = str.substring(offset + 1).toFloat();
+    else if constexpr (std::is_same_v(T, int)) value = str.substring(offset + 1).toInt();
+
+    if (value < this->min || value > this->max) return;
+
+    *(this->ptr) = value;
+
+    Serial.print("Update ");
+    Serial.print(this->name);
+    Serial.print(": ");
+    Serial.println(value);
+
+    EEPROM.put(0, configHolder);
+  }
+
+  String get_json() {
+    String str = ", \"";
+    str += String(this->name);
+    str += "\": ";
+    str += String(*(this->ptr));
+
+    return str;
+  }
+};
+
+//floats
+DataDescription<float> descTO("TO", "Target Oxygen", &configHolder.config.targetOxygen, 0.0f, 25.0f);
+DataDescription<float> descDZ("DZ", "Dead Zone", &configHolder.config.deadZone, 0.0f, 25.0f);
+DataDescription<float> descOv("Ov", "Override", &configHolder.config.overdrive, 0.0f, 25.0f);
+DataDescription<float> descOP("OP", "Oxygen Pump Cut Out", &configHolder.config.oxygenPumpCutOut, 0.0f, 25.0f);
+DataDescription<float> descRM("RM", "Raise Multi", &configHolder.config.raiseMulti, 0.0f, 1000.0f);
+DataDescription<float> descFM("FM", "Fall Multi", &configHolder.config.fallMulti, 0.0f, 1000.0f);
+DataDescription<float> descNM("NM", "Neutral Multi", &configHolder.config.neutralMulti, 0.0f, 1000.0f);
+DataDescription<float> descAT("AT", "Alpha Threshold", &configHolder.config.alphaThreshold, 0.0f, 1000.0f);
+
+//integers
+DataDescription<int> descMS("MS", "Max Servo", &configHolder.config.maxServo, 0, 4096);
+DataDescription<int> descMi("Mi", "Min Servo", &configHolder.config.minServo, 0, 4096);
+DataDescription<int> descOS("OS", "Open Step", &configHolder.config.openStep, 0, 4096);
+DataDescription<int> descCS("CS", "Close Step", &configHolder.config.closeStep, 0, 4096);
+DataDescription<int> descWT("WT", "Wait Time", &configHolder.config.waitTime, 0, INT_MAX);
+DataDescription<int> descSP("SP", "Start Position", &configHolder.config.startPosition, 0, 4096);
+DataDescription<int> descIW("IW", "Initial Wait Time", &configHolder.config.initialWaitTime, 0, INT_MAX);
+DataDescription<int> descVS("VS", "Overdrive Step", &configHolder.config.overdriveStep, 0, 4096);
+DataDescription<int> descCT("CT", "Check Time", &configHolder.config.checkTime, 0, INT_MAX);
+DataDescription<int> descDA("DA", "Data Acquire", &configHolder.config.dataAcquire, 0, INT_MAX);
+
+DataDescriptionBase* desc[] {
+  &descTO, &descDZ, &descOv, &descOP, &descRM, &descFM, &descNM, &descAT,
+  &descMS, &descMi, &descOS, &descCS, &descWT, &descSP, &descIW, &descVS, &descCT, &descDA
+};
+
 void sendData() {
   String str = "{ \"time\": \"";
 
@@ -301,62 +465,10 @@ void sendData() {
   str += "\", \"oxygen\": ";
   str += String(oxygen);
 
-  str += ", \"target\": ";
-  str += String(config.targetOxygen);
-
   str += ", \"servo\": ";
   str += String(servoPWM);
 
-  str += ", \"deadZone\": ";
-  str += String(config.deadZone);
-
-  str += ", \"overdrive\": ";
-  str += String(config.overdrive);
-
-  str += ", \"maxServo\": ";
-  str += String(config.maxServo);
-
-  str += ", \"minServo\": ";
-  str += String(config.minServo);
-
-  str += ", \"openStep\": ";
-  str += String(config.openStep);
-
-  str += ", \"closeStep\": ";
-  str += String(config.closeStep);
-
-  str += ", \"closeStep\": ";
-  str += String(config.closeStep);
-
-  str += ", \"waitTime\": ";
-  str += String(config.waitTime);
-
-  str += ", \"startPosition\": ";
-  str += String(config.startPosition);
-
-  str += ", \"initialWaitTime\": ";
-  str += String(config.initialWaitTime);
-
-  str += ", \"overdriveStep\": ";
-  str += String(config.overdriveStep);
-
-  str += ", \"checkTime\": ";
-  str += String(config.checkTime);
-
-  str += ", \"oxygenPumpCutOut\": ";
-  str += String(config.oxygenPumpCutOut);
-
-  str += ", \"raiseMulti\": ";
-  str += String(config.raiseMulti);
-
-  str += ", \"fallMulti\": ";
-  str += String(config.fallMulti);
-
-  str += ", \"neutralMulti\": ";
-  str += String(config.neutralMulti);
-
-  str += ", \"alphaThreshold\": ";
-  str += String(config.alphaThreshold);
+  for (auto d : desc) str += d->get_json();
 
   str += ", \"alpha\": ";
   str += String(regression.lastResult.alpha);
@@ -369,183 +481,15 @@ void sendData() {
   server.broadcastTXT(str);
 }
 
+
 void getData(uint8_t* payload) {
   auto str = String((char*)payload);
 
-  switch (str[0]) {
-    case 'T': {
-      float temp = str.substring(2, str.length()).toFloat();
-      if (temp < 0.00) return;
+  for (auto d : desc) d->update(str);
 
-      config.targetOxygen = temp;
-      Serial.print("New target oxygen: ");
-      Serial.println(config.targetOxygen);
-      EEPROM.put(0, config);
-    } break;
-
-    case 'd': {
-      float temp = str.substring(2, str.length()).toFloat();
-      if (temp < 0.00) return;
-
-      config.deadZone = temp;
-      Serial.print("New deadzone: ");
-      Serial.println(config.deadZone);
-
-    } break;
-
-    case 'o': {
-      float temp = str.substring(2, str.length()).toFloat();
-      if (temp < 0.00) return;
-
-      config.overdrive = temp;
-      Serial.print("New overdrive: ");
-      Serial.println(config.overdrive);
-
-    } break;
-
-    case 'S': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0 || temp > 4096) return;
-
-      config.maxServo = temp;
-      Serial.print("New maxServo: ");
-      Serial.println(config.maxServo);
-
-    } break;
-
-    case 's': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0 || temp > 4096) return;
-
-      config.minServo = temp;
-      Serial.print("New minServo: ");
-      Serial.println(config.minServo);
-
-    } break;
-
-    case 't': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0 || temp > 4096) return;
-
-      config.openStep = temp;
-      Serial.print("New openStep: ");
-      Serial.println(config.openStep);
-
-    } break;
-
-    case 'c': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0 || temp > 4096) return;
-
-      config.closeStep = temp;
-      Serial.print("New closeStep: ");
-      Serial.println(config.closeStep);
-
-    } break;
-
-    case 'w': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 50) return;
-
-      config.waitTime = temp;
-      Serial.print("New waitTime: ");
-      Serial.println(config.waitTime);
-
-    } break;
-
-    case 'p': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.startPosition = temp;
-      Serial.print("New startPosition: ");
-      Serial.println(config.startPosition);
-
-    } break;
-
-    case 'i': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.initialWaitTime = temp;
-      Serial.print("New initialWaitTime: ");
-      Serial.println(config.initialWaitTime);
-
-    } break;
-
-    case 'e': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 50) return;
-
-      config.checkTime = temp;
-      Serial.print("New checkTime: ");
-      Serial.println(config.checkTime);
-
-    } break;
-
-    case 'O': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.overdriveStep = temp;
-      Serial.print("New overdriveStep: ");
-      Serial.println(config.overdriveStep);
-
-    } break;
-    
-    case 'P': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.oxygenPumpCutOut = temp;
-      Serial.print("New oxygenPumpCutOut: ");
-      Serial.println(config.oxygenPumpCutOut);
-
-    } break;
-
-    case 'r': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.raiseMulti = temp;
-      Serial.print("New raiseMulti: ");
-      Serial.println(config.raiseMulti);
-
-    } break;
-
-    case 'f': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.fallMulti = temp;
-      Serial.print("New fallMulti: ");
-      Serial.println(config.fallMulti);
-
-    } break;
-
-    case 'n': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.neutralMulti = temp;
-      Serial.print("New neutralMulti: ");
-      Serial.println(config.neutralMulti);
-
-    } break;
-
-    case 'a': {
-      int temp = str.substring(2, str.length()).toInt();
-      if (temp < 0) return;
-
-      config.alphaThreshold = temp;
-      Serial.print("New alphaThreshold: ");
-      Serial.println(config.alphaThreshold);
-
-    } break;
-
-  }
-
-  EEPROM.put(0, config);
+  normalTimer.set_wait_time(configHolder.config.waitTime);
+  overrideTime.set_wait_time(configHolder.config.checkTime);
+  dataTimer.set_wait_time(configHolder.config.dataAcquire);
 }
 
 //Infinite loop.
@@ -556,8 +500,9 @@ void loop() {
   if (time < wsTime) {
     wsTime = time;
     displayTime = time;
-    lastCheck = time;
-    lastOverrideCheck = time;
+    normalTimer.set_wait_time(configHolder.config.waitTime);
+    overrideTime.set_wait_time(configHolder.config.checkTime);
+    dataTimer.set_wait_time(configHolder.config.dataAcquire);
     startTime = 0;
   }
 
@@ -582,17 +527,23 @@ void loop() {
   pinMode(BUTTON_PIN, INPUT);
   bool buttonState = digitalRead(BUTTON_PIN);
 
-  float diff = oxygen - config.targetOxygen;
+  float diff = oxygen - configHolder.config.targetOxygen;
   int temp_angle = servoPWM;
 
-  regression.updateData(oxygen);
-  auto reg = regression.calculateLinearRegression();
+  if (startTime + configHolder.config.dataAcquire)
 
-  bool bypass = abs(reg.alpha) > config.alphaThreshold;
+  auto reg = regression.lastResult;
+
+  if (dataTimer.check_time()) {
+    regression.updateData(oxygen);
+    reg = regression.calculateLinearRegression();
+  }
+
+  bool bypass = abs(reg.alpha) > configHolder.config.alphaThreshold;
 
   if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";
-    status += String(config.targetOxygen);
+    status += String(configHolder.config.targetOxygen);
 
     String status2 = "O: ";
     status2 += String(oxygen);
@@ -602,66 +553,66 @@ void loop() {
     displayTime = time;
 
     if (buttonState == 0) {
-      if (config.targetOxygen < 25.0) {
-        config.targetOxygen += 0.25;
-      } else if (config.targetOxygen >= 25) {
-        config.targetOxygen = 0;
+      if (configHolder.config.targetOxygen < 25.0) {
+        configHolder.config.targetOxygen += 0.25;
+      } else if (configHolder.config.targetOxygen >= 25) {
+        configHolder.config.targetOxygen = 0;
       }
     }
   }
 
-  if (startTime + config.initialWaitTime > time) return;
+  if (startTime + configHolder.config.initialWaitTime > time) return;
 
-  if ((oxygen > config.oxygenPumpCutOut && pump)) {
+  if ((oxygen > configHolder.config.oxygenPumpCutOut && pump)) {
     pump = false;
     pinMode(PUMPS_SSR_PIN, OUTPUT);
     digitalWrite(PUMPS_SSR_PIN, LOW); 
   }
 
-  if (config.waitTime + lastCheck <= time || bypass) {
-    float mul = config.neutralMulti;
+  if (normalTimer.check_time() || bypass) {
+    float mul = configHolder.config.neutralMulti;
 
-    if (diff > config.deadZone) {
-      if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
-      if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
+    if (diff > configHolder.config.deadZone) {
+      if (configHolder.config.alphaThreshold < reg.alpha) mul = configHolder.config.raiseMulti;
+      if (-configHolder.config.alphaThreshold > reg.alpha) mul = configHolder.config.fallMulti;
 
-      temp_angle += floor(float(config.openStep) * mul);
+      temp_angle += floor(float(configHolder.config.openStep) * mul);
     }
-    if (diff < -config.deadZone) {
-      if (config.alphaThreshold < reg.alpha) mul = config.fallMulti;
-      if (-config.alphaThreshold > reg.alpha) mul = config.raiseMulti;
+    if (diff < -configHolder.config.deadZone) {
+      if (configHolder.config.alphaThreshold < reg.alpha) mul = configHolder.config.fallMulti;
+      if (-configHolder.config.alphaThreshold > reg.alpha) mul = configHolder.config.raiseMulti;
 
-      temp_angle -= ceil(float(config.closeStep) * mul);
+      temp_angle -= ceil(float(configHolder.config.closeStep) * mul);
     }
 
     lastCheck = time;
   }
 
 
-  if (config.checkTime + lastOverrideCheck <= time) {
-    float mul = config.neutralMulti;
+  if (overrideTimer.check_time()) {
+    float mul = configHolder.config.neutralMulti;
 
-    if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
-    if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
+    if (configHolder.config.alphaThreshold < reg.alpha) mul = configHolder.config.raiseMulti;
+    if (-configHolder.config.alphaThreshold > reg.alpha) mul = configHolder.config.fallMulti;
 
-    if (diff > config.overdrive) {
-      if (config.alphaThreshold < reg.alpha) mul = config.raiseMulti;
-      if (-config.alphaThreshold > reg.alpha) mul = config.fallMulti;
+    if (diff > configHolder.config.overdrive) {
+      if (configHolder.config.alphaThreshold < reg.alpha) mul = configHolder.config.raiseMulti;
+      if (-configHolder.config.alphaThreshold > reg.alpha) mul = configHolder.config.fallMulti;
 
-      temp_angle += floor(float(config.overdriveStep) * mul);
+      temp_angle += floor(float(configHolder.config.overdriveStep) * mul);
     }
-    if (diff < -config.overdrive) {
-      if (config.alphaThreshold < reg.alpha) mul = config.fallMulti;
-      if (-config.alphaThreshold > reg.alpha) mul = config.raiseMulti;
+    if (diff < -configHolder.config.overdrive) {
+      if (configHolder.config.alphaThreshold < reg.alpha) mul = configHolder.config.fallMulti;
+      if (-configHolder.config.alphaThreshold > reg.alpha) mul = configHolder.config.raiseMulti;
 
-      temp_angle -= ceil(float(config.overdriveStep) * mul);
+      temp_angle -= ceil(float(configHolder.config.overdriveStep) * mul);
     }
 
     lastOverrideCheck = time;
   }
 
   if (temp_angle != servoPWM) {
-    temp_angle = constrain(temp_angle, config.minServo, config.maxServo);
+    temp_angle = constrain(temp_angle, configHolder.config.minServo, configHolder.config.maxServo);
 
     servoPWM = temp_angle;
     pwm.setPWM(0, 0, temp_angle);

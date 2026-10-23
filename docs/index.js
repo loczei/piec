@@ -68,8 +68,23 @@ document.querySelector("#scale").addEventListener("change", () => {
 
 let history = 200;
 
+function updateHistory(newHistory) {
+    history = newHistory;
+
+    remove = oxygen.data.datasets[0].len - history;
+
+    if (remove <= 0) return;
+
+    oxygen.data.labels.splice(0, remove);
+    oxygen.data.datasets[0].data.splice(0, remove);
+    oxygen.data.datasets[1].data.splice(0, remove);
+
+    servo.data.labels.splice(0, remove);
+    servo.data.datasets[0].data.splice(0, remove);
+}
+
 document.querySelector("#history-button").addEventListener("click", () => {
-    history = Number(document.querySelector("#history").value);
+    updateHistory(Number(document.querySelector("#history").value));
 });
 
 let socket;
@@ -79,9 +94,14 @@ const ipButton = document.querySelector('#ip-button');
 let updateFuncs = [];
 
 function updateInfo(msg) {
+    const percent = Number.parseFloat((msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100)
+    const servo = Number.parseFloat(msg.servo)
+    const alpha = Number.parseFloat(msg.alpha)
+    const beta = Number.parseFloat(msg.beta)
+
     document.querySelector(".info-oxygen").innerHTML = `Odczyt: ${msg.oxygen} Zadana: ${msg.target}`
     document.querySelector(".info-par").innerHTML =
-    `Wychylenie serwa: ${(msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100}% Wychylenie serwa: ${msg.servo}  <br> Alpha: ${msg.alpha} Beta: ${msg.beta}`
+    `Wychylenie serwa: ${percent.toFixed(2)}% Wychylenie serwa: ${servo.toFixed(2)}  <br> Alpha: ${alpha.toFixed(2)} Beta: ${beta.toFixed(2)}`
 }
 
 ipButton.addEventListener("click", () => {
@@ -146,6 +166,10 @@ ipButton.addEventListener("click", () => {
     });
 });
 
+document.querySelectorAll(".history-button").forEach((e) => e.addEventListener("click", (ev) => {
+    updateHistory(Number(ev.currentTarget.innerHTML));
+}))
+
 function button(name, char, payload, oname, odesc, pname) {
     if (oname !== undefined) {
         document.querySelector(".options").insertAdjacentHTML("beforeend", `
@@ -181,12 +205,12 @@ function button(name, char, payload, oname, odesc, pname) {
 const buttons = [
     {
         "name": "zadana",
-        "char": "T",
+        "char": "TO",
         "payload": true,
     },
     {
         "name": "deadzone",
-        "char": "d",
+        "char": "DZ",
         "payload": true,
         "fullname": "Martwa strefa O₂ [%]",
         "description": "Zakres wokół wartości zadanej, w którym serwo nie wykonuje żadnych ruchów. Wartości 0.00-25.00",
@@ -194,7 +218,7 @@ const buttons = [
     },
     {
         "name": "overdrive",
-        "char": "o",
+        "char": "Ov",
         "payload": true,
         "fullname": "Próg szybkiej korekty O₂ [%]",
         "description": "Po przekroczeniu określonej różnicy pomiędzy O₂ zmierzonym a zadanym regulator ma reagować szybciej. Wartości 0.00-25.00",
@@ -202,7 +226,7 @@ const buttons = [
     },
     {
         "name": "maxServo",
-        "char": "S",
+        "char": "MS",
         "payload": true,
         "fullname": "Maksymalne położenie klapki PW",
         "description": "Regulowane ograniczenie, którego serwo nie może przekroczyć w kierunku pełnego otwarcia. Wartości: 0-4096",
@@ -210,7 +234,7 @@ const buttons = [
     },
     {
         "name": "minServo",
-        "char": "s",
+        "char": "Mi",
         "payload": true,
         "fullname": "Minimalne położenie klapki PW",
         "description": "Regulowane ograniczenie, którego serwo nie może przekroczyć w kierunku zamknięcia. Wartości: 0-4096",
@@ -218,7 +242,7 @@ const buttons = [
     },
     {
         "name": "openStep",
-        "char": "t",
+        "char": "OS",
         "payload": true,
         "fullname": "Wielkość kroku OTWIERANIA klapki PW",
         "description": "Wartości: 0-4096",
@@ -226,7 +250,7 @@ const buttons = [
     },
     {
         "name": "closeStep",
-        "char": "c",
+        "char": "CS",
         "payload": true,
         "fullname": "Wielkość kroku ZAMYKANIA klapki PW",
         "description": "Wartości: 0-4096",
@@ -234,7 +258,7 @@ const buttons = [
     },
     {
         "name": "waitTime",
-        "char": "w",
+        "char": "WT",
         "payload": true,
         "fullname": "Czas oczekiwania po wykonaniu kroku [ms]",
         "description": "Po każdym ruchu serwo stoi przez ustawiony czas. Dopiero później wykonywana jest kolejna ocena O₂. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
@@ -242,7 +266,7 @@ const buttons = [
     },
     {
         "name": "startPosition",
-        "char": "p",
+        "char": "SP",
         "payload": true,
         "fullname": "Pozycja startowa klapki PW",
         "description": "Pozycja klapki podczas uruchamiania procesu. Wartości 0-4096",
@@ -250,7 +274,7 @@ const buttons = [
     },
     {
         "name": "initialWaitTime",
-        "char": "i",
+        "char": "IW",
         "payload": true,
         "fullname": "Opóźnienie rozpoczęcia automatycznej regulacji O₂ [ms]",
         "description": "Po uruchomieniu klapka pozostaje w pozycji startowej przez ustawiony czas. Dopiero później rozpoczyna się regulacja na podstawie O₂. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
@@ -258,7 +282,7 @@ const buttons = [
     },
     {
         "name": "checkTime",
-        "char": "e",
+        "char": "CT",
         "payload": true,
         "fullname": "Czas oczekiwania szybkiej korekty [ms]",
         "description": "Możliwość ustawienia krótszego czasu oczekiwania niż podczas normalnej regulacji.. Wartości: 0+ (W milisekundach tzn. ustawianie tu 1000 da 1 sekundę oczekiwania)",
@@ -266,7 +290,7 @@ const buttons = [
     },
     {
         "name": "overdriveStep",
-        "char": "O",
+        "char": "VS",
         "payload": true,
         "fullname": "Wielkość kroku szybkiej korekty",
         "description": "Osobny, większy krok stosowany przy dużym błędzie O₂. Wartości 0-4096",
@@ -274,7 +298,7 @@ const buttons = [
     },
     {
         "name": "oxygenPumpCutOut",
-        "char": "P",
+        "char": "OP",
         "payload": true,
         "fullname": "Próg odcięcia zasilania pompy [%]",
         "description": "Wartości 0.00-25.00",
@@ -282,7 +306,7 @@ const buttons = [
     },
 {
     "name": "raiseMulti",
-    "char": "r",
+    "char": "RM",
     "payload": true,
     "fullname": "Mnożnik prędkości serwa przy wykryciu zwiększania różnicy [-]",
     "description": "Wartości 0.00+",
@@ -290,7 +314,7 @@ const buttons = [
 },
 {
     "name": "fallMulti",
-    "char": "f",
+    "char": "FM",
     "payload": true,
     "fullname": "Mnożnik prędkości serwa przy wykryciu zmniejszania różnicy [-]",
     "description": "Wartości 0.00+",
@@ -298,7 +322,7 @@ const buttons = [
 },
 {
     "name": "neutralMulti",
-    "char": "n",
+    "char": "NM",
     "payload": true,
     "fullname": "Mnożnik prędkości serwa przy wykryciu braku zmiany różnicy [-]",
     "description": "Wartości 0.00+",
@@ -306,11 +330,19 @@ const buttons = [
 },
 {
     "name": "alphaThreshold",
-    "char": "a",
+    "char": "AT",
     "payload": true,
     "fullname": "Próg wartości alpha decydującego czy mamy doczynienia ze znaczym zwiększeniem/zmniejszeniem różnicy [%]",
     "description": "Wartości 0.00+",
     "arduinoname": "alphaThreshold",
+},
+{
+    "name": "dataAcquire",
+    "char": "DA",
+    "payload": true,
+    "fullname": "Co jaki czas mają być zbierana dane do regresji [ms]",
+    "description": "Wartości 0+",
+    "arduinoname": "dataAcquire",
 },
 ];
 

@@ -11,7 +11,10 @@ nav {
     padding: 10px;
     font-size: 20px;
     flex: 0 0 400px;
-    height: 120px;
+    display: flex;
+    flex-wrap: wrap;
+    min-height: 120px;
+    align-content: space-between;
 }
 
 .history {
@@ -46,7 +49,15 @@ button:hover {
 }
 
 .up, .down {
-    height: 50%;
+    width: 100%;
+}
+
+.up {
+    align-self: start;
+}
+
+.down {
+    align-self: end;
 }
 
 main {
@@ -58,6 +69,45 @@ main {
 main > div {
     flex: 0 0 auto;
     min-width: 700px;
+}
+
+.history {
+    display: flex;
+    flex-wrap: wrap;
+
+}
+
+.history > .main {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: space-between;
+    width: 100%;
+    font-size: 20px;
+    margin: 0 0 10px 0;
+}
+
+.history > .main > .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+.history-button {
+
+    text-align: center;
+    min-height: 30px;
+    min-width: 40px;
+    margin: 2px;
+    background-color: yellow;
+}
+
+.history-button:hover {
+    cursor: pointer;
+    background-color: rgb(235, 235, 0);
+}
+
+.history > .input {
+    width: 100%;
 }
 
 .options {
