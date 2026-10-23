@@ -94,12 +94,12 @@ const ipButton = document.querySelector('#ip-button');
 let updateFuncs = [];
 
 function updateInfo(msg) {
-    const percent = Number.parseFloat((msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100)
+    const percent = Number.parseFloat((msg.servo - msg["Min Servo"]) / (msg["Max Servo"] - msg["Min Servo"]) * 100)
     const servo = Number.parseFloat(msg.servo)
     const alpha = Number.parseFloat(msg.alpha)
     const beta = Number.parseFloat(msg.beta)
 
-    document.querySelector(".info-oxygen").innerHTML = `Odczyt: ${msg.oxygen} Zadana: ${msg.target}`
+    document.querySelector(".info-oxygen").innerHTML = `Odczyt: ${msg.oxygen} Zadana: ${msg["Target Oxygen"]}`
     document.querySelector(".info-par").innerHTML =
     `Wychylenie serwa: ${percent.toFixed(2)}% Wychylenie serwa: ${servo.toFixed(2)}  <br> Alpha: ${alpha.toFixed(2)} Beta: ${beta.toFixed(2)}`
 }
@@ -132,12 +132,12 @@ ipButton.addEventListener("click", () => {
         
         oxygen.data.labels.push(time);
         oxygen.data.datasets[0].data.push(msg.oxygen);
-        oxygen.data.datasets[1].data.push(msg.target);
+        oxygen.data.datasets[1].data.push(msg["Target Oxygen"]);
 
         oxygen.update();
 
         servo.data.labels.push(time);
-        servo.data.datasets[0].data.push((msg.servo - msg.minServo) / (msg.maxServo - msg.minServo) * 100);
+        servo.data.datasets[0].data.push((msg.servo - msg["Min Servo"]) / (msg["Max Servo"] - msg["Min Servo"]) * 100);
 
         if (history < oxygen.data.datasets[0].len) {
             oxygen.data.labels.shift();
