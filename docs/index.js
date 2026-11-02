@@ -235,10 +235,12 @@ ipButton.addEventListener("click", () => {
 
         servo.update();
 
-        csvData.push(`${msg.time};${msg.oxygen}`);
-        localStorage.setItem("csv", JSON.stringify(csvData));
-        csvInfo.innerHTML = `Aktualnie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;
-
+        if (csvAcquire) {
+            csvData.push(`${msg.time};${msg.oxygen}`);
+            localStorage.setItem("csv", JSON.stringify(csvData));
+            csvInfo.innerHTML = `Aktualnie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;    
+        }
+        
         updateInfo(msg);
         if (msg["Max Servo"]) {
             minServo = msg["Min Servo"];
