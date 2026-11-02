@@ -183,9 +183,8 @@ function updateInfo(msg) {
     document.querySelector(".info-oxygen").innerHTML = `Odczyt: ${msg.oxygen} Zadana: ${msg["Target Oxygen"]}`
     document.querySelector(".info-par").innerHTML =
     `Wychylenie serwa: ${percent.toFixed(2)}% Wychylenie serwa: ${servo.toFixed(2)}
-    <br> Alpha: ${alpha.toFixed(2)} Beta: ${beta.toFixed(2)} R^2: ${r2_lin.toFixed(2)}
-    <br> Alpha: ${alpha.toFixed(2)} R^2: ${r2_lin.toFixed(2)}
-    <br> Alpha: ${a.toFixed(2)} R^2: ${r2_sqr.toFixed(2)}
+    <br> Regresja liniowa Alpha: ${alpha.toFixed(2)} R^2: ${r2_lin.toFixed(2)}
+    <br> Regresja kwadratowa Alpha: ${a.toFixed(2)} R^2: ${r2_sqr.toFixed(2)}
     `
 }
 
@@ -304,14 +303,6 @@ const buttons = [
         "payload": true,
     },
     {
-        "name": "deadzone",
-        "char": "DZ",
-        "payload": true,
-        "fullname": "Martwa strefa O₂ [%]",
-        "description": "Zakres wokół wartości zadanej, w którym serwo nie wykonuje żadnych ruchów. Wartości 0.00-25.00",
-        "arduinoname": "Dead Zone",
-    },
-    {
         "name": "maxServo",
         "char": "MS",
         "payload": true,
@@ -373,7 +364,7 @@ const buttons = [
     "payload": true,
     "fullname": "Strefa martwa regulacji",
     "description": "Dopuszczalna odchyłka od tlenu zadanego, w której układ dąży do spoczynku. Wartości: 0.0 - 10.0",
-    "arduinoname": "Deadzone"
+    "arduinoname": "Dead Zone"
 },
 {
     "name": "derRestThreshold",

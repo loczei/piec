@@ -43,7 +43,7 @@ public:
   }
 
   bool check_time(unsigned long time = millis()) {
-    if (this->waitTime >= time - this->lastCheck) {
+    if ((this->waitTime + this->lastCheck) <= time) {
       this->lastCheck = time;
       return true;
     }
@@ -144,7 +144,7 @@ public:
     float r2 = 0.0f;    // współczynnik determinacji R^2
   };
 
-  static constexpr uint8_t BUFFER_SIZE = 50;
+  static constexpr uint8_t BUFFER_SIZE = 20;
   float data_x[BUFFER_SIZE] = {0};
   float data_y[BUFFER_SIZE] = {0};
 
@@ -171,7 +171,7 @@ public:
     return Avg { sum_x / count, sum_y / count };
   }
 
-  Regression() = default;
+  Data() = default;
 
   void updateData(float oxygen) {
     data_x[head] = millis() / 1000.0f;
@@ -188,158 +188,165 @@ public:
   bool isReady() const {
     return count >= BUFFER_SIZE;
   }
-
-  // --- REGRESJA LINIOWA (y = alpha * x + beta) ---
-  LinearRegressionResult calculateLinearRegression() {
+LinearRegressionResult calculateLinearRegression() {
     if (!isReady()) {
-      return lastLinearResult;
+        return lastLinearResult;
     }
 
     Avg avg = calculateAverage();
 
     float cov = 0.0f;
     float var_x = 0.0f;
-    float ss_tot = 0.0f;
+    float ss_tot = 0.0f; // To jest suma (y - avg.y)^2
 
     for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
-      float dx = data_x[i] - avg.x;
-      float dy = data_y[i] - avg.y;
-      cov += dx * dy;
-      var_x += dx * dx;
-      ss_tot += dy * dy;
+        float dx = data_x[i] - avg.x;
+        float dy = data_y[i] - avg.y;
+        cov += dx * dy;
+        var_x += dx * dx;
+        ss_tot += dy * dy;
     }
 
-    if (var_x > 0.00001f) {
-      lastLinearResult.alpha = cov / var_x;
-      lastLinearResult.beta = avg.y - (lastLinearResult.alpha * avg.x);
+    // 1. Zabezpieczenie przed brakiem ruchu w X lub Y
+    if (var_x < 0.000001f) {
+        lastLinearResult.alpha = 0.0f;
+        lastLinearResult.beta = avg.y;
+        lastLinearResult.r2 = 0.0f;
+        return lastLinearResult;
+    }
 
-      // Obliczenie sumy kwadratów reszt (SS_res)
-      float ss_res = 0.0f;
-      for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
-        float y_pred = lastLinearResult.alpha * data_x[i] + lastLinearResult.beta;
-        float diff = data_y[i] - y_pred;
-        ss_res += diff * diff;
-      }
+    lastLinearResult.alpha = cov / var_x;
+    lastLinearResult.beta = avg.y - (lastLinearResult.alpha * avg.x);
 
-      if (ss_tot > 0.00001f) {
-        float r2 = 1.0f - (ss_res / ss_tot);
-        lastLinearResult.r2 = (r2 < 0.0f) ? 0.0f : ((r2 > 1.0f) ? 1.0f : r2);
-      } else {
-        lastLinearResult.r2 = 1.0f; // Brak wariancji w danych y
-      }
+    // 2. Jeśli sygnał Y jest idealnie płaski (brak wariancji), a błąd stoi w miejscu:
+    if (ss_tot < 0.000001f) {
+        lastLinearResult.r2 = 1.0f; // Idealna linia pozioma
+    } else {
+        // Wzór Pearsona: r^2 = cov^2 / (var_x * ss_tot)
+        float r2 = (cov * cov) / (var_x * ss_tot);
+        
+        // Zabezpieczenie przed przekroczeniem 1.0 przez drobne zaokrąglenia float
+        if (r2 > 1.0f) r2 = 1.0f;
+        if (r2 < 0.0f) r2 = 0.0f;
+        
+        lastLinearResult.r2 = r2;
     }
 
     return lastLinearResult;
-  }
-
-  // --- REGRESJA KWADRATOWA (y = a*x^2 + b*x + c) ---
-  QuadraticRegressionResult calculateQuadraticRegression() {
-    if (!isReady()) {
-      return lastQuadraticResult;
-    }
-
-    Avg avg = calculateAverage();
-
-    // Centrujemy x wokół średniej (u = x - avg.x) aby uniknąć ucięć precyzji float przy dużych potęgach
-    float s_u1 = 0.0f, s_u2 = 0.0f, s_u3 = 0.0f, s_u4 = 0.0f;
-    float s_y = 0.0f, s_uy = 0.0f, s_u2y = 0.0f;
-    float ss_tot = 0.0f;
-
-    for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
-      float u = data_x[i] - avg.x;
-      float y = data_y[i];
-      float u2 = u * u;
-
-      s_u1 += u;
-      s_u2 += u2;
-      s_u3 += u2 * u;
-      s_u4 += u2 * u2;
-
-      s_y += y;
-      s_uy += u * y;
-      s_u2y += u2 * y;
-
-      float dy = y - avg.y;
-      ss_tot += dy * dy;
-    }
-
-    // Układ równań: M * [a, b_u, c_u]^T = Y
-    // Gdzie u = x - avg.x
-    float M[3][4] = {
-      { s_u4, s_u3, s_u2, s_u2y },
-      { s_u3, s_u2, s_u1, s_uy  },
-      { s_u2, s_u1, (float)BUFFER_SIZE, s_y }
-    };
-
-    // Eliminacja Gaussa z wyborem elementu głównego
-    for (int i = 0; i < 3; i++) {
-      int maxRow = i;
-      for (int k = i + 1; k < 3; k++) {
-        if (fabsf(M[k][i]) > fabsf(M[maxRow][i])) {
-          maxRow = k;
-        }
-      }
-
-      for (int k = 0; k <= 3; k++) {
-        float tmp = M[maxRow][k];
-        M[maxRow][k] = M[i][k];
-        M[i][k] = tmp;
-      }
-
-      if (fabsf(M[i][i]) < 0.000001f) {
-        return lastQuadraticResult; // Macierz osobliwa
-      }
-
-      for (int k = i + 1; k < 3; k++) {
-        float factor = M[k][i] / M[i][i];
-        for (int j = i; j <= 3; j++) {
-          M[k][j] -= factor * M[i][j];
-        }
-      }
-    }
-
-    // Podstawianie wsteczne
-    float sol[3];
-    for (int i = 2; i >= 0; i--) {
-      sol[i] = M[i][3];
-      for (int j = i + 1; j < 3; j++) {
-        sol[i] -= M[i][j] * sol[j];
-      }
-      sol[i] /= M[i][i];
-    }
-
-    float a_fit = sol[0];
-    float b_u   = sol[1];
-    float c_u   = sol[2];
-
-    // Powrót ze współrzędnych scentrowanych: u = x - x_bar
-    // y = a*(x - x_bar)^2 + b_u*(x - x_bar) + c_u
-    // a = a_fit
-    // b = b_u - 2 * a_fit * x_bar
-    // c = c_u - b_u * x_bar + a_fit * x_bar^2
-    lastQuadraticResult.a = a_fit;
-    lastQuadraticResult.b = b_u - 2.0f * a_fit * avg.x;
-    lastQuadraticResult.c = c_u - b_u * avg.x + a_fit * avg.x * avg.x;
-
-    // Obliczenie sumy kwadratów reszt (SS_res) dla regresji kwadratowej
-    float ss_res = 0.0f;
-    for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
-      float u = data_x[i] - avg.x;
-      float y_pred = a_fit * u * u + b_u * u + c_u;
-      float diff = data_y[i] - y_pred;
-      ss_res += diff * diff;
-    }
-
-    if (ss_tot > 0.00001f) {
-      float r2 = 1.0f - (ss_res / ss_tot);
-      lastQuadraticResult.r2 = (r2 < 0.0f) ? 0.0f : ((r2 > 1.0f) ? 1.0f : r2);
-    } else {
-      lastQuadraticResult.r2 = 1.0f;
-    }
-
+}
+QuadraticRegressionResult calculateQuadraticRegression() {
+  if (!isReady()) {
     return lastQuadraticResult;
   }
 
+  Avg avg = calculateAverage();
+
+  // Akumulatory w układzie scentrowanym u = x - avg.x
+  float s_u1 = 0.0f, s_u2 = 0.0f, s_u3 = 0.0f, s_u4 = 0.0f;
+  float s_y = 0.0f, s_uy = 0.0f, s_u2y = 0.0f;
+  float ss_tot = 0.0f;
+
+  for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
+    float u = data_x[i] - avg.x;
+    float y = data_y[i];
+    float u2 = u * u;
+
+    s_u1 += u;
+    s_u2 += u2;
+    s_u3 += u2 * u;
+    s_u4 += u2 * u2;
+
+    s_y += y;
+    s_uy += u * y;
+    s_u2y += u2 * y;
+
+    float dy = y - avg.y;
+    ss_tot += dy * dy;
+  }
+
+  // Jeśli brak zmienności w y (płaska linia)
+  if (ss_tot < 0.000001f) {
+    lastQuadraticResult.a = 0.0f;
+    lastQuadraticResult.b = 0.0f;
+    lastQuadraticResult.c = avg.y;
+    lastQuadraticResult.r2 = 1.0f;
+    return lastQuadraticResult;
+  }
+
+  // Układ równań w przestrzeni scentrowanej u:
+  // [ s_u4  s_u3  s_u2 ] [ a   ]   [ s_u2y ]
+  // [ s_u3  s_u2  s_u1 ] [ b_u ] = [ s_uy  ]
+  // [ s_u2  s_u1    N  ] [ c_u ]   [ s_y   ]
+  float M[3][4] = {
+    { s_u4, s_u3, s_u2, s_u2y },
+    { s_u3, s_u2, s_u1, s_uy  },
+    { s_u2, s_u1, (float)BUFFER_SIZE, s_y }
+  };
+
+  // Eliminacja Gaussa z wyborem elementu głównego
+  for (int i = 0; i < 3; i++) {
+    int maxRow = i;
+    for (int k = i + 1; k < 3; k++) {
+      if (fabsf(M[k][i]) > fabsf(M[maxRow][i])) {
+        maxRow = k;
+      }
+    }
+
+    for (int k = 0; k <= 3; k++) {
+      float tmp = M[maxRow][k];
+      M[maxRow][k] = M[i][k];
+      M[i][k] = tmp;
+    }
+
+    if (fabsf(M[i][i]) < 0.000001f) {
+      return lastQuadraticResult; // Osobliwość
+    }
+
+    for (int k = i + 1; k < 3; k++) {
+      float factor = M[k][i] / M[i][i];
+      for (int j = i; j <= 3; j++) {
+        M[k][j] -= factor * M[i][j];
+      }
+    }
+  }
+
+  // Podstawianie wsteczne
+  float sol[3];
+  for (int i = 2; i >= 0; i--) {
+    sol[i] = M[i][3];
+    for (int j = i + 1; j < 3; j++) {
+      sol[i] -= M[i][j] * sol[j];
+    }
+    sol[i] /= M[i][i];
+  }
+
+  float a_fit = sol[0];
+  float b_u   = sol[1];
+  float c_u   = sol[2];
+
+  // 1. Obliczenie R^2 BEZPOŚREDNIO w układzie scentrowanym (brak błędu float!)
+  float ss_res = 0.0f;
+  for (uint8_t i = 0; i < BUFFER_SIZE; i++) {
+    float u = data_x[i] - avg.x;
+    float y_pred = a_fit * u * u + b_u * u + c_u;
+    float diff = data_y[i] - y_pred;
+    ss_res += diff * diff;
+  }
+
+  float r2 = 1.0f - (ss_res / ss_tot);
+  if (r2 < 0.0f) r2 = 0.0f;
+  if (r2 > 1.0f) r2 = 1.0f;
+  lastQuadraticResult.r2 = r2;
+
+  // 2. Współczynniki:
+  // W logice sterowania sprawdzasz: sqrReg.a > 0.
+  // Współczynnik 'a' przy u^2 jest IDENTYCZNY jak przy x^2! (bo d^2y/dx^2 = 2a)
+  lastQuadraticResult.a = a_fit;
+  lastQuadraticResult.b = b_u - 2.0f * a_fit * avg.x;
+  lastQuadraticResult.c = c_u - b_u * avg.x + a_fit * avg.x * avg.x;
+
+  return lastQuadraticResult;
+}
   float get_derivative() const {
     if (count < 2) {
       return 0.0f;
@@ -360,23 +367,23 @@ public:
     String str = "";
 
     str += ", \"linA\": ";
-    str += String(this->lastLinearResult.alpha);
+    str += String(lastLinearResult.alpha);
     str += ", \"linB\": ";
-    str += String(this->lastLinearResult.beta);
+    str += String(lastLinearResult.beta);
     str += ", \"linR\": ";
-    str += String(this->lastLinearResult.r2);
+    str += String(lastLinearResult.r2);
 
     str += ", \"sqrA\": ";
-    str += String(this->lastQuadraticResult.alpha);
+    str += String(lastQuadraticResult.a);
     str += ", \"sqrB\": ";
-    str += String(this->lastQuadraticResult.beta);
+    str += String(lastQuadraticResult.b);
     str += ", \"sqrC\": ";
-    str += String(this->lastQuadraticResult.beta);
+    str += String(lastQuadraticResult.c);
     str += ", \"sqrR\": ";
-    str += String(this->lastQuadraticResult.r2);
+    str += String(lastQuadraticResult.r2);
 
     str += ", \"der\": ";
-    str += String(this->get_derivative());
+    str += String(get_derivative());
 
     return str;
   }
@@ -616,7 +623,7 @@ public:
 
 //floats
 DataDescription<float> descTO("TO", "Target Oxygen", &configHolder.config.targetOxygen, 0.0f, 25.0f);
-DataDescription<float> descDZ("DZ", "Dead Zone", &configHolder.config.deadZone, 0.0f, 25.0f);
+DataDescription<float> descDZ("DZ", "Dead Zone", &configHolder.config.deadzone, 0.0f, 25.0f);
 DataDescription<float> descOP("OP", "Oxygen Pump Cut Out", &configHolder.config.oxygenPumpCutOut, 0.0f, 25.0f);
 
 //integers
@@ -650,8 +657,20 @@ DataDescription<float> descAGF("AGF", "Aggr Fall Base", &configHolder.config.agr
 DataDescription<int>   descAFA("AFA", "Aggr Fall Add", &configHolder.config.agressiveFallAdditional, 0, 500);
 
 DataDescriptionBase* desc[] {
-  &descTO, &descDZ, &descOv, &descOP, &descRM, &descFM, &descNM, &descAT,
-  &descMS, &descMi, &descOS, &descCS, &descWT, &descSP, &descIW, &descVS, &descCT, &descDA
+  // Floats
+  &descTO, &descDZ, &descOP,
+
+  // Integers
+  &descMS, &descMi, &descWT, &descSP, &descIW, &descDA,
+
+  // Rest / Sleep thresholds
+  &descDRT, &descRAT, &descRRT, &descRIA, &descRIR, &descRCT,
+
+  // Raising parameters
+  &descRS, &descAR, &descAAR, &descAGR, &descARA,
+
+  // Falling parameters
+  &descFS, &descAF, &descAAF, &descAGF, &descAFA
 };
 
 void sendData() {
@@ -665,10 +684,8 @@ void sendData() {
   str += ", \"servo\": ";
   str += String(servoPWM);
 
-  if (sendConfig) {
     for (auto d : desc) str += d->get_json();
     sendConfig = false;
-  }
 
   str += data.get_json();
 
@@ -686,7 +703,6 @@ void getData(uint8_t* payload) {
   for (auto d : desc) d->update(str);
 
   normalTimer.set_wait_time(configHolder.config.waitTime);
-  overrideTimer.set_wait_time(configHolder.config.checkTime);
   dataTimer.set_wait_time(configHolder.config.dataAcquire);
 }
 
@@ -700,7 +716,6 @@ void loop() {
     wsTime = time;
     displayTime = time;
     normalTimer.set_wait_time(configHolder.config.waitTime);
-    overrideTimer.set_wait_time(configHolder.config.checkTime);
     dataTimer.set_wait_time(configHolder.config.dataAcquire);
     startTime = 0;
   }
@@ -732,12 +747,13 @@ void loop() {
     data.updateData(abs(diff));
     data.calculateLinearRegression();
     data.calculateQuadraticRegression();
+    Serial.println("Test 1");
   }
 
   auto linReg = data.lastLinearResult;
   auto sqrReg = data.lastQuadraticResult;
 
-  if (time - wsTime >= WEBSOCKET_COOLDOWN) {
+  if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";
     status += String(configHolder.config.targetOxygen);
 
@@ -770,7 +786,7 @@ void loop() {
   if (normalTimer.check_time()) {
     if ((abs(diff) > config.deadzone ||
         abs(data.get_derivative()) > config.derRestThreshold ||
-        (linReg.alpha > config.restAlphaThreshold && linReg.r2 > config.restRThreshold)
+        (linReg.alpha > config.restAlphaThreshold /* && linReg.r2 > config.*/ )
       ) && atRest) {
         atRest = false;
     }
@@ -778,8 +794,8 @@ void loop() {
     if (!atRest) {
       if (
         abs(diff) < config.deadzone &&
-        linReg.alpha < config.restIfAlpha &&
-        linReg.r2 > config.restIfR
+        linReg.alpha < config.restIfAlpha // &&
+//        linReg.r2 > config.restIfR
       ) {
         atRest = true;
       } else if (linReg.alpha > 0) {
@@ -788,7 +804,7 @@ void loop() {
         if (
           config.aggresiveRaise && (
             linReg.alpha > config.alphaAgressiveRaising ||
-            sqrReg.r2 > linReg.r2 ||
+//            sqrReg.r2 > linReg.r2 ||
             sqrReg.a > 0
           )
         ) {
