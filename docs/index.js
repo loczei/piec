@@ -224,7 +224,7 @@ ipButton.addEventListener("click", () => {
         servo.data.labels.push(time);
         servo.data.datasets[0].data.push((msg.servo - msg["Min Servo"]) / (msg["Max Servo"] - msg["Min Servo"]) * 100);
 
-        if (history < oxygen.data.datasets[0].len) {
+        if (history < oxygen.data.datasets[0].data.length) {
             oxygen.data.labels.shift();
             oxygen.data.datasets[0].data.shift();
             oxygen.data.datasets[1].data.shift();
