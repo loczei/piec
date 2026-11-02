@@ -10,6 +10,7 @@
   </head>
   <body>
     <nav>
+      <div class="tile"><button id="button-panel">Panel</button><button id="button-config">Ustawienia</button></div>
       <div class="tile">
         <div class="up">
           Adres płytki:
@@ -31,11 +32,7 @@
         </div>
       </div>
     </nav>
-    <main>
-      <div><canvas id="tlen"></canvas></div>
-      <div><canvas id="serwo"></canvas></div>
-      <div></div>
-      <br>
+    <main class="config" style="display: none;">
       <div class="options">
         <div class="history">
           <div class="main">
@@ -53,6 +50,21 @@
 <!--          Historia (domyślnie 200): <div class="history-input"> <input type="text" id="history"><button id="history-button">Ustaw</button> </div> <br>
           Cały zakres: <input type="checkbox" id="scale" checked> <br>-->
         </div>
+      </div>
+    </main>
+
+    <main class="panel">
+      <div><canvas id="tlen"></canvas></div>
+      <div><canvas id="serwo"></canvas></div>
+      <br>
+      <div class="options">
+      <div class="csv">
+        <div class="status-csv">Aktualnie nie są zbierane dane.</div>
+        <button id="button-start">Start CSV</button>
+        <button id="button-stop">Stop CSV</button>
+        <button id="button-restart">Wyczyść CSV</button>
+        <button id="button-download">Pobierz CSV</button>
+      </div>
       </div>
     </main>
     

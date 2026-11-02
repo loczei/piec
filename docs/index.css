@@ -71,10 +71,31 @@ main > div {
     min-width: 700px;
 }
 
+.panel > div {
+    min-height: calc(700px / 2);
+}
+
 .history {
     display: flex;
     flex-wrap: wrap;
+}
 
+.csv {
+    diplay: flex;
+    flex-wrap: wrap;
+    background-color: darkcyan;
+    padding: 10px;
+}
+
+.csv > .status-csv {
+    width: 100%;
+    font-size: 20px;
+    height: 100px;
+}
+
+.csv > button {
+    width: 24%;
+    height: 100px;
 }
 
 .history > .main {
