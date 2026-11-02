@@ -235,7 +235,7 @@ ipButton.addEventListener("click", () => {
         servo.update();
 
         if (csvAcquire) {
-            csvData.push(`${msg.time};${msg.oxygen}`);
+            csvData.push(`${msg.time};${msg.oxygen};${msg.servo}`);
             localStorage.setItem("csv", JSON.stringify(csvData));
             csvInfo.innerHTML = `Aktualnie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;    
         }
