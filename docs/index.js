@@ -138,7 +138,7 @@ document.querySelector("#button-download").addEventListener("click", () => {
     }
 
     // 1. Zdefiniowanie nagłówków
-    const headers = "Czas;Tlen";
+    const headers = "Czas;Tlen;Serwo;Zadana";
 
     // 2. Połączenie nagłówków z zebranymi danymi znakiem nowej linii
     const csvContent = headers + "\r\n" + csvData.join("\r\n");
@@ -235,7 +235,7 @@ ipButton.addEventListener("click", () => {
         servo.update();
 
         if (csvAcquire) {
-            csvData.push(`${msg.time};${msg.oxygen};${msg.servo}`);
+            csvData.push(`${msg.time};${msg.oxygen};${msg.servo};${msg["Target Oxygen"]}`);
             localStorage.setItem("csv", JSON.stringify(csvData));
             csvInfo.innerHTML = `Aktualnie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;    
         }
