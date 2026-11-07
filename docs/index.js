@@ -404,7 +404,7 @@ const buttons = [
         "payload": true,
         "fullname": "Eksponenta liczonego szybkiego spadku",
         "description": "Agresywność liczonego progu spadku. Wyższe wartości spowodują, że algorytm dopuszcza większy spadek. Wartości: 0.0 - 100.0",
-        "arduinoname": "Calculated Steep"
+        "arduinoname": "Steep Exponent"
     },
     {
         "name": "steepAddition",
