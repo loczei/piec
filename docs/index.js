@@ -1,5 +1,3 @@
-const oxygen_ctx = document.getElementById('tlen');
-
 let oxygen = new Chart(oxygen_ctx, {
     type: 'line',
     data: {
@@ -20,7 +18,7 @@ let oxygen = new Chart(oxygen_ctx, {
         scales: {
             y: {
                 min: 0.0,
-                max: 23.0
+                max: 25.0
             }
         }
     }
@@ -112,13 +110,18 @@ csvInfo.innerHTML = `Aktualnie nie są zbierane dane. Plik CSV posiada ${csvData
 
 
 document.querySelector("#button-start").addEventListener("click", () => {
-    csvAcquire = true;
-    csvInfo.innerHTML = `Aktualnie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;
-});
+    if (csvAcquire == false) {
+        csvAcquire = true;
+        csvInfo.innerHTML = `Aktualnie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;
+        document.querySelector("#button-start").style.backgroundColor = "red";
+        document.querySelector("#button-start").innerHTML = "Stop CSV";
+    } else {
+        csvAcquire = false;
+        csvInfo.innerHTML = `Aktualnie nie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;
+        document.querySelector("#button-start").style.backgroundColor = "#006381";
+        document.querySelector("#button-start").innerHTML = "Start CSV";
+    }
 
-document.querySelector("#button-stop").addEventListener("click", () => {
-    csvAcquire = false;
-    csvInfo.innerHTML = `Aktualnie nie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;
 });
 
 document.querySelector("#button-restart").addEventListener("click", () => {
@@ -126,6 +129,8 @@ document.querySelector("#button-restart").addEventListener("click", () => {
     csvData = [];
     localStorage.setItem("csv", JSON.stringify(csvData));
     csvInfo.innerHTML = `Aktualnie nie są zbierane dane. Plik CSV posiada ${csvData.length} pozycji.`;
+    document.querySelector("#button-start").style.backgroundColor = "#006381";
+    document.querySelector("#button-start").innerHTML = "Start CSV";
 });
 
 document.querySelector("#button-download").addEventListener("click", () => {
@@ -185,6 +190,7 @@ function updateInfo(msg) {
     `Wychylenie serwa: ${percent.toFixed(2)}% Wychylenie serwa: ${servo.toFixed(2)}
     <br> Regresja liniowa Alpha: ${alpha.toFixed(2)} R^2: ${r2_lin.toFixed(2)}
     <br> Regresja kwadratowa Alpha: ${a.toFixed(2)} R^2: ${r2_sqr.toFixed(2)}
+    <br> Spoczynek: ${Number.parseFloat(msg.atRest) == 1 ? "Tak" : "Nie"}
     `
 }
 
@@ -350,150 +356,86 @@ const buttons = [
         "description": "Wartości 0.00-25.00",
         "arduinoname": "Oxygen Pump Cut Out",
     },
-{
-    "name": "dataAcquire",
-    "char": "DA",
-    "payload": true,
-    "fullname": "Co jaki czas mają być zbierana dane do regresji [ms]",
-    "description": "Wartości 0+",
-    "arduinoname": "Data Acquire",
-},
-{
-    "name": "deadzone",
-    "char": "DZ",
-    "payload": true,
-    "fullname": "Strefa martwa regulacji",
-    "description": "Dopuszczalna odchyłka od tlenu zadanego, w której układ dąży do spoczynku. Wartości: 0.0 - 10.0",
-    "arduinoname": "Dead Zone"
-},
-{
-    "name": "derRestThreshold",
-    "char": "DRT",
-    "payload": true,
-    "fullname": "Próg pochodnej dla wybudzenia",
-    "description": "Minimalna bezwzględna wartość pierwszej pochodnej wybudzająca serwo ze stanu spoczynku. Wartości: 0.0 - 5.0",
-    "arduinoname": "Der Rest Thresh"
-},
-{
-    "name": "restAlphaThreshold",
-    "char": "RAT",
-    "payload": true,
-    "fullname": "Próg nachylenia dla wybudzenia",
-    "description": "Wartość nachylenia regresji liniowej (alpha) powyżej której następuje wybudzenie ze spoczynku. Wartości: 0.0 - 5.0",
-    "arduinoname": "Rest Alpha Thresh"
-},
-{
-    "name": "restRThreshold",
-    "char": "RRT",
-    "payload": true,
-    "fullname": "Próg R^2 dla wybudzenia",
-    "description": "Minimalna jakość dopasowania regresji liniowej (R^2) potwierdzająca wiarygodność trendu wybudzenia. Wartości: 0.0 - 1.0",
-    "arduinoname": "Rest R Thresh"
-},
-{
-    "name": "restIfAlpha",
-    "char": "RIA",
-    "payload": true,
-    "fullname": "Maksymalna alpha dla spoczynku",
-    "description": "Górny próg nachylenia regresji liniowej dopuszczający przejście w stan spoczynku. Wartości: 0.0 - 2.0",
-    "arduinoname": "Rest If Alpha"
-},
-{
-    "name": "restIfR",
-    "char": "RIR",
-    "payload": true,
-    "fullname": "Minimalne R^2 dla spoczynku",
-    "description": "Wymagany minimalny współczynnik R^2 potwierdzający stabilizację przed wejściem w spoczynek. Wartości: 0.0 - 1.0",
-    "arduinoname": "Rest If R"
-},
-{
-    "name": "restCorrectionThreshold",
-    "char": "RCT",
-    "payload": true,
-    "fullname": "Próg mikro-korekty w spoczynku",
-    "description": "Wartość nachylenia alpha wyzwalająca pojedynczy mały krok korekcyjny bez pełnego wybudzania. Wartości: 0.0 - 2.0",
-    "arduinoname": "Rest Corr Thresh"
-},
-{
-    "name": "raiseStep",
-    "char": "RS",
-    "payload": true,
-    "fullname": "Podstawowy krok przy wzroście błędu",
-    "description": "Bazowa zmiana pozycji serwa (PWM) wykonywana, gdy błąd narasta (alpha > 0). Wartości: 0 - 500",
-    "arduinoname": "Raise Step"
-},
-{
-    "name": "aggresiveRaise",
-    "char": "AR",
-    "payload": true,
-    "fullname": "Włączenie agresywnego wzrostu",
-    "description": "Flaga zezwalająca na dynamiczne powiększanie kroku serwa w trybie wzrostu błędu. Wartości: 0 - 1",
-    "arduinoname": "Aggresive Raise"
-},
-{
-    "name": "alphaAgressiveRaising",
-    "char": "AAR",
-    "payload": true,
-    "fullname": "Próg nachylenia agresywnego wzrostu",
-    "description": "Wartość nachylenia regresji liniowej aktywująca składową agresywną przy narastaniu błędu. Wartości: 0.0 - 10.0",
-    "arduinoname": "Alpha Aggr Raise"
-},
-{
-    "name": "agressiveRaising",
-    "char": "AGR",
-    "payload": true,
-    "fullname": "Podstawa logarytmu agresywnego wzrostu",
-    "description": "Podstawa logarytmu skalującego krok proporcjonalnie do błędu przy rosnącym trendzie (musi być > 1.0). Wartości: 1.01 - 10.0",
-    "arduinoname": "Aggr Raising Base"
-},
-{
-    "name": "agressiveRaisingAdditional",
-    "char": "ARA",
-    "payload": true,
-    "fullname": "Stały dodatek agresywnego wzrostu",
-    "description": "Stała wartość dodawana do kroku serwa po zakwalifikowaniu ruchu jako agresywny wzrost. Wartości: 0 - 500",
-    "arduinoname": "Aggr Raise Add"
-},
-{
-    "name": "fallStep",
-    "char": "FS",
-    "payload": true,
-    "fullname": "Podstawowy krok przy spadku błędu",
-    "description": "Bazowa zmiana pozycji serwa wycofująca/hamująca ruch, gdy błąd maleje (alpha <= 0). Wartości: 0 - 500",
-    "arduinoname": "Fall Step"
-},
-{
-    "name": "aggresiveFall",
-    "char": "AF",
-    "payload": true,
-    "fullname": "Włączenie agresywnego spadku",
-    "description": "Flaga zezwalająca na dynamiczne powiększanie kroku redukcyjnego przy szybkim spadku błędu. Wartości: 0 - 1",
-    "arduinoname": "Aggresive Fall"
-},
-{
-    "name": "alphaAgressiveFall",
-    "char": "AAF",
-    "payload": true,
-    "fullname": "Próg nachylenia agresywnego spadku",
-    "description": "Ujemne nachylenie regresji liniowej poniżej którego aktywuje się agresywne hamowanie. Wartości: -10.0 - 0.0",
-    "arduinoname": "Alpha Aggr Fall"
-},
-{
-    "name": "agressiveFall",
-    "char": "AGF",
-    "payload": true,
-    "fullname": "Podstawa logarytmu agresywnego spadku",
-    "description": "Podstawa logarytmu skalującego krok redukcyjny względem wielkości błędu (musi być > 1.0). Wartości: 1.01 - 10.0",
-    "arduinoname": "Aggr Fall Base"
-},
-{
-    "name": "agressiveFallAdditional",
-    "char": "AFA",
-    "payload": true,
-    "fullname": "Stały dodatek agresywnego spadku",
-    "description": "Stała wartość powiększająca redukcję pozycji serwa w trybie agresywnego spadku. Wartości: 0 - 500",
-    "arduinoname": "Aggr Fall Add"
-}
+    {
+        "name": "dataAcquire",
+        "char": "DA",
+        "payload": true,
+        "fullname": "Co jaki czas mają być zbierana dane do regresji [ms]",
+        "description": "Wartości 0+",
+        "arduinoname": "Data Acquire",
+    },
+    {
+        "name": "deadzone",
+        "char": "DZ",
+        "payload": true,
+        "fullname": "Strefa martwa regulacji",
+        "description": "Dopuszczalna odchyłka od tlenu zadanego, w której układ dąży do spoczynku. Wartości: 0.0 - 10.0",
+        "arduinoname": "Dead Zone"
+    },
+    {
+        "name": "fallSteep",
+        "char": "FS",
+        "payload": true,
+        "fullname": "Próg szybkiego spadku",
+        "description": "Wartość oceniająca, czy tlen nie zbliża się za szybko do zadanego (Zmniejszenie tej wartości sprawi, że algorytm będzie próbował hamować zmianę tlenu). Wartości: 0.0 - 100.0",
+        "arduinoname": "Fall Steep"
+    },
+    {
+        "name": "bypass",
+        "char": "BP",
+        "payload": true,
+        "fullname": "Wybudzenie przy wykryciu gwałtownej zmiany tlenu",
+        "description": "Ustawione na 1 powoduje, że algorytm ignoruje czas pomiędzy krokami w przypadku, gdy tlen wykroczy poza martwą strefę. Ustawienie na 0 wyłącza tą funkcję.",
+        "arduinoname": "Bypass"
+    },
+    {
+        "name": "calculatedSteep",
+        "char": "CS",
+        "payload": true,
+        "fullname": "Włącznik liczonego progu szybkiego spadku",
+        "description": "Ustawione na 1 powoduje, że algorytm używa obliczonego progu szybkiego spadku. Liczony próg pozwala uzyskać potencjalnie lepszy spadek. Ustawienie na 0 wyłącza tą funkcję.",
+        "arduinoname": "Calculated Steep"
+    },
+    {
+        "name": "steepExponent",
+        "char": "SE",
+        "payload": true,
+        "fullname": "Eksponenta liczonego szybkiego spadku",
+        "description": "Agresywność liczonego progu spadku. Wyższe wartości spowodują, że algorytm dopuszcza większy spadek. Wartości: 0.0 - 100.0",
+        "arduinoname": "Calculated Steep"
+    },
+    {
+        "name": "steepAddition",
+        "char": "SA",
+        "payload": true,
+        "fullname": "Dodatek liczonego szybkiego spadku",
+        "description": "Wartość dodawana do liczonego spadku, powoduje przesunięcie liczonego spadku o ustawioną wartość tzn. jeżeli policzony spadek to 0.5, to jeżeli ta wartość ustawiona jest na 0.25 spowoduje, że policzony spadek będzie wynosił ostatecznie 0.75. Wartości: 0.0 - 100.0.",
+        "arduinoname": "Steep Addition"
+    },
+    {
+        "name": "alphaAgressive",
+        "char": "AE",
+        "payload": true,
+        "fullname": "Próg dodatkowej korekty",
+        "description": "Jeżeli wartość alphy regresji liniowej (tzn. tempo zmiany tlenu w kierunku odstępwa od zadanej) osiągnie podaną wartość, spowoduje to dodatkowy krok serwa. Wartości: 0.0 - 100.0.",
+        "arduinoname": "Alpha Agressive"
+    },
+    {
+        "name": "alphaRest",
+        "char": "AR",
+        "payload": true,
+        "fullname": "Próg alphy dla spoczynku",
+        "description": "Jeżeli wartość alphy regresji liniowej będzie mniejsza od podanej wartości, spowoduje to przejście algorytmu w stan spoczynku. Wartości: 0.0 - 100.0.",
+        "arduinoname": "Alpha Rest"
+    },
+    {
+        "name": "stdDevRest",
+        "char": "SR",
+        "payload": true,
+        "fullname": "Próg odchylenia standarowego dla spoczynku",
+        "description": "Jeżeli wartość odchylenia standarowego będzie mniejsza od podanej wartości, spowoduje to przejście algorytmu w stan spoczynku. Wartości: 0.0 - 100.0.",
+        "arduinoname": "StdDev Rest"
+    },
 ];
 
 buttons.forEach((b) => {

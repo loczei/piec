@@ -31,6 +31,7 @@ int startTime = 0;
 bool pump = true;
 bool sendConfig = false;
 bool atRest = true;
+bool breakDone = true;
 
 class Timer {
 public:
@@ -158,17 +159,35 @@ public:
   struct Avg {
     float x = 0.0f;
     float y = 0.0f;
+    float stddev = 0.0f;
   };
+
+  Avg lastAvg {};
 
   Avg calculateAverage() const {
     if (count == 0) return {0.0f, 0.0f};
     float sum_x = 0.0f;
     float sum_y = 0.0f;
+
     for (uint8_t i = 0; i < count; i++) {
       sum_x += data_x[i];
       sum_y += data_y[i];
     }
-    return Avg { sum_x / count, sum_y / count };
+
+    float dev = 0.0f;
+    float avg_y = sum_y / count;
+
+    for (uint8_t i = 0; i < count; i++) {
+      dev += (data_y[i] - avg_y)*(data_y[i] - avg_y);
+    }
+
+    dev = sqrt(dev / (count * (count - 1)));
+
+    this->lastAvg.x = sum_x / count;
+    this->lastAvg.y = avg_y;
+    this->lastAvg.stddev = dev;
+
+    return Avg { sum_x / count, avg_y, dev };
   }
 
   Data() = default;
@@ -365,6 +384,9 @@ QuadraticRegressionResult calculateQuadraticRegression() {
 
   String get_json() {
     String str = "";
+
+    str += ", \"stdDev\": ";
+    str += String(lastAvg.stddev);
 
     str += ", \"linA\": ";
     str += String(lastLinearResult.alpha);
@@ -634,27 +656,14 @@ DataDescription<int> descSP("SP", "Start Position", &configHolder.config.startPo
 DataDescription<int> descIW("IW", "Initial Wait Time", &configHolder.config.initialWaitTime, 0, INT_MAX);
 DataDescription<int> descDA("DA", "Data Acquire", &configHolder.config.dataAcquire, 0, INT_MAX);
 
-// Strefa martwa i progi wybudzenia / wejścia w spoczynek
-DataDescription<float> descDRT("DRT", "Der Rest Thresh", &configHolder.config.derRestThreshold, 0.0f, 5.0f);
-DataDescription<float> descRAT("RAT", "Rest Alpha Thresh", &configHolder.config.restAlphaThreshold, 0.0f, 5.0f);
-DataDescription<float> descRRT("RRT", "Rest R Thresh", &configHolder.config.restRThreshold, 0.0f, 1.0f);
-DataDescription<float> descRIA("RIA", "Rest If Alpha", &configHolder.config.restIfAlpha, 0.0f, 2.0f);
-DataDescription<float> descRIR("RIR", "Rest If R", &configHolder.config.restIfR, 0.0f, 1.0f);
-DataDescription<float> descRCT("RCT", "Rest Corr Thresh", &configHolder.config.restCorrectionThreshold, 0.0f, 2.0f);
-
-// Parametry ruchu przy wzroście błędu (alpha > 0)
-DataDescription<int>   descRS("RS", "Raise Step", &configHolder.config.raiseStep, 0, 500);
-DataDescription<int>  descAR("AR", "Aggresive Raise", &configHolder.config.aggresiveRaise, 0, 1);
-DataDescription<float> descAAR("AAR", "Alpha Aggr Raise", &configHolder.config.alphaAgressiveRaising, 0.0f, 10.0f);
-DataDescription<float> descAGR("AGR", "Aggr Raising Base", &configHolder.config.agressiveRaising, 1.01f, 10.0f);
-DataDescription<int>   descARA("ARA", "Aggr Raise Add", &configHolder.config.agressiveRaisingAdditional, 0, 500);
-
-// Parametry ruchu przy spadku błędu (alpha <= 0)
-DataDescription<int>   descFS("FS", "Fall Step", &configHolder.config.fallStep, 0, 500);
-DataDescription<int>  descAF("AF", "Aggresive Fall", &configHolder.config.aggresiveFall, 0, 1);
-DataDescription<float> descAAF("AAF", "Alpha Aggr Fall", &configHolder.config.alphaAgressiveFall, -10.0f, 0.0f);
-DataDescription<float> descAGF("AGF", "Aggr Fall Base", &configHolder.config.agressiveFall, 1.01f, 10.0f);
-DataDescription<int>   descAFA("AFA", "Aggr Fall Add", &configHolder.config.agressiveFallAdditional, 0, 500);
+DataDescription<float> descFS("FS", "Fall Steep", &configHolder.config.fallSteep, 0.0f, 100.0f);
+DataDescription<int> descBP("BP", "Bypass", &configHolder.config.bypass, 0, 1);
+DataDescription<int> descCS("CS", "Calculated Steep", &configHolder.config.useCalculatedSteep, 0, 1);
+DataDescription<float> descSE("SE", "Steep Exponent", &configHolder.config.steepExponent, 0.0f, 100.0f);
+DataDescription<float> descSA("SA", "Steep Addition", &configHolder.config.steepAddition, 0.0f, 100.0f);
+DataDescription<float> descAE("AE", "Alpha Agressive", &configHolder.config.alphaAgressive, 0.0f, 100.0f);
+DataDescription<float> descAR("AR", "Alpha Rest", &configHolder.config.steepAddition, 0.0f, 100.0f);
+DataDescription<float> descSR("SR", "StdDev Rest", &configHolder.config.alphaAgressive, 0.0f, 100.0f);
 
 DataDescriptionBase* desc[] {
   // Floats
@@ -663,14 +672,8 @@ DataDescriptionBase* desc[] {
   // Integers
   &descMS, &descMi, &descWT, &descSP, &descIW, &descDA,
 
-  // Rest / Sleep thresholds
-  &descDRT, &descRAT, &descRRT, &descRIA, &descRIR, &descRCT,
-
-  // Raising parameters
-  &descRS, &descAR, &descAAR, &descAGR, &descARA,
-
-  // Falling parameters
-  &descFS, &descAF, &descAAF, &descAGF, &descAFA
+  &descFS, &descBP, &descCS, &descSE, &descSA, &descAE,
+  &descAR, &descSR,
 };
 
 void sendData() {
@@ -683,6 +686,9 @@ void sendData() {
 
   str += ", \"servo\": ";
   str += String(servoPWM);
+
+  str += ", \"atRest\": ";
+  str += String(atRest);
 
     for (auto d : desc) str += d->get_json();
     sendConfig = false;
@@ -746,12 +752,11 @@ void loop() {
   if (dataTimer.check_time()) {
     data.updateData(abs(diff));
     data.calculateLinearRegression();
-    data.calculateQuadraticRegression();
-    Serial.println("Test 1");
+    // data.calculateQuadraticRegression();
   }
 
   auto linReg = data.lastLinearResult;
-  auto sqrReg = data.lastQuadraticResult;
+  // auto sqrReg = data.lastQuadraticResult;
 
   if (DISPLAY_COOLDOWN + displayTime <= time) {
     String status = "Z: ";
@@ -783,55 +788,46 @@ void loop() {
 
   int servo_move = 0;
 
-  if (normalTimer.check_time()) {
-    if ((abs(diff) > config.deadzone ||
-        abs(data.get_derivative()) > config.derRestThreshold ||
-        (linReg.alpha > config.restAlphaThreshold /* && linReg.r2 > config.*/ )
-      ) && atRest) {
+  bool bypassCheck =  && ;
+
+  if (normalTimer.check_time() ||
+    (abs(diff) > config.deadzone && linReg.alpha > 0 && atRest == true && config.bypass)
+  ) {
+    if (abs(diff) > config.deadzone) {
+      if (linReg.alpha > 0) {
         atRest = false;
+        breakDone = false;
+      }
+      servo_move += config.raiseStep;
     }
 
     if (!atRest) {
+      float fallSteep = config.fallSteep;
+
+      if (config.useCalculatedSteep) {
+        fallSteep = pow(abs(diff), config.steepExponent) + config.steepAddition;
+      }
+
+      if (linReg.alpha < fallSteep) {
+        servo_move -= config.raiseStep;
+      }
+
+      if (abs(diff) < config.deadzone && linReg.alpha < config.fallBreak) {
+        servo_move -= config.breakStep;
+        breakDone = true;
+      }
+
+      if (config.alphaAgressive > linReg.alpha) {
+        servo_move += config.raiseStep;
+      }
+
       if (
         abs(diff) < config.deadzone &&
-        linReg.alpha < config.restIfAlpha // &&
-//        linReg.r2 > config.restIfR
+        config.alphaRest > abs(linReg.alpha) &&
+        config.stdDevRest > data.lastAvg.stddev
       ) {
         atRest = true;
-      } else if (linReg.alpha > 0) {
-        servo_move += config.raiseStep;
-
-        if (
-          config.aggresiveRaise && (
-            linReg.alpha > config.alphaAgressiveRaising ||
-//            sqrReg.r2 > linReg.r2 ||
-            sqrReg.a > 0
-          )
-        ) {
-          if (config.agressiveRaising > 1) {
-            servo_move += ceil(log(abs(diff) + 1.0f) / log(config.agressiveRaising));
-          }
-
-          servo_move += config.agressiveRaisingAdditional;
-        }
-      } else {
-        servo_move -= config.fallStep;
-
-        if (
-          config.aggresiveFall && (
-            linReg.alpha < config.alphaAgressiveFall ||
-            abs(diff) > config.deadzone
-          )
-        ) {
-          if (config.agressiveFall > 1) {
-            servo_move -= ceil(log(abs(diff) + 1.0f) / log(config.agressiveFall));
-          }
-
-          servo_move -= config.agressiveFallAdditional;
-        }
       }
-    } else if (linReg.alpha > config.restCorrectionThreshold) {
-      servo_move += config.raiseStep;
     }
   }
 
