@@ -84,26 +84,17 @@ struct Config {
 
   // --- Strefa martwa i progi stanu spoczynku (atRest) ---
   float deadzone = 0.5f;
-  float derRestThreshold = 0.2f;
-  float restAlphaThreshold = 0.1f;
-  float restRThreshold = 0.8f;
-  float restIfAlpha = 0.05f;
-  float restIfR = 0.7f;
-  float restCorrectionThreshold = 0.15f;
-
-  // --- Parametry ruchu przy wzroście błędu (alpha > 0) ---
-  int raiseStep = 10;
-  int aggresiveRaise = 0;
-  float alphaAgressiveRaising = 0.5f;
-  float agressiveRaising = 2.0f;
-  int agressiveRaisingAdditional = 5;
-
-  // --- Parametry ruchu przy spadku błędu (alpha <= 0) ---
-  int fallStep = 10;
-  int aggresiveFall = 0;
-  float alphaAgressiveFall = -0.5f;
-  float agressiveFall = 2.0f;
-  int agressiveFallAdditional = 5;
+  int raiseStep = 1;
+  float fallSteep = 1.0;
+  int bypass = 1;
+  int useCalculatedSteep = 1;
+  float steepExponent = 1.5;
+  float steepAddition = 0.25;
+  float alphaAgressive = 1.0;
+  float alphaRest = 1.0;
+  float stdDevRest = 1.0;
+  int fallBreak = 1;
+  int breakStep = 1;
 };
 
 Config defaultConfig;
@@ -164,7 +155,7 @@ public:
 
   Avg lastAvg {};
 
-  Avg calculateAverage() const {
+  Avg calculateAverage() {
     if (count == 0) return {0.0f, 0.0f};
     float sum_x = 0.0f;
     float sum_y = 0.0f;
@@ -658,12 +649,15 @@ DataDescription<int> descDA("DA", "Data Acquire", &configHolder.config.dataAcqui
 
 DataDescription<float> descFS("FS", "Fall Steep", &configHolder.config.fallSteep, 0.0f, 100.0f);
 DataDescription<int> descBP("BP", "Bypass", &configHolder.config.bypass, 0, 1);
+DataDescription<int> descRS("RS", "Raise Step", &configHolder.config.raiseStep, 0, 1);
 DataDescription<int> descCS("CS", "Calculated Steep", &configHolder.config.useCalculatedSteep, 0, 1);
 DataDescription<float> descSE("SE", "Steep Exponent", &configHolder.config.steepExponent, 0.0f, 100.0f);
 DataDescription<float> descSA("SA", "Steep Addition", &configHolder.config.steepAddition, 0.0f, 100.0f);
 DataDescription<float> descAE("AE", "Alpha Agressive", &configHolder.config.alphaAgressive, 0.0f, 100.0f);
 DataDescription<float> descAR("AR", "Alpha Rest", &configHolder.config.steepAddition, 0.0f, 100.0f);
-DataDescription<float> descSR("SR", "StdDev Rest", &configHolder.config.alphaAgressive, 0.0f, 100.0f);
+DataDescription<float> descSR("SR", "StdDev Rest", &configHolder.config.stdDevRest, 0.0f, 100.0f);
+DataDescription<int> descFB("FB", "Fall Break", &configHolder.config.fallBreak, 0, 1);
+DataDescription<int> descBS("BS", "Break Step", &configHolder.config.breakStep, 0, 1000);
 
 DataDescriptionBase* desc[] {
   // Floats
@@ -673,7 +667,7 @@ DataDescriptionBase* desc[] {
   &descMS, &descMi, &descWT, &descSP, &descIW, &descDA,
 
   &descFS, &descBP, &descCS, &descSE, &descSA, &descAE,
-  &descAR, &descSR,
+  &descAR, &descSR, &descFB, &descBS,
 };
 
 void sendData() {
@@ -787,8 +781,6 @@ void loop() {
   }
 
   int servo_move = 0;
-
-  bool bypassCheck =  && ;
 
   if (normalTimer.check_time() ||
     (abs(diff) > config.deadzone && linReg.alpha > 0 && atRest == true && config.bypass)

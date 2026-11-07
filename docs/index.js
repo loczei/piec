@@ -436,6 +436,22 @@ const buttons = [
         "description": "Jeżeli wartość odchylenia standarowego będzie mniejsza od podanej wartości, spowoduje to przejście algorytmu w stan spoczynku. Wartości: 0.0 - 100.0.",
         "arduinoname": "StdDev Rest"
     },
+    {
+        "name": "fallBreak",
+        "char": "FB",
+        "payload": true,
+        "fullname": "Wyłącznik hamulca",
+        "description": "Jeżeli ustawione na 1, to funkcja hamulca jest włączone. Jeżeli na 0 to wyłączona.",
+        "arduinoname": "Fall Break"
+    },
+    {
+        "name": "breakStep",
+        "char": "BS",
+        "payload": true,
+        "fullname": "Krok hamulca",
+        "description": "O ile hamulec ma ruszyć serwo. Wartości: 0 - 1000.",
+        "arduinoname": "Break Step"
+    },
 ];
 
 buttons.forEach((b) => {
