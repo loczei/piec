@@ -1,3 +1,5 @@
+const oxygen_ctx = document.getElementById('tlen');
+
 let oxygen = new Chart(oxygen_ctx, {
     type: 'line',
     data: {
